@@ -67,7 +67,7 @@ export default async function WaitlistAdminPage() {
     <main className="mx-auto max-w-6xl px-4 py-10 md:px-8">
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">GLOW AI Waitlist Insights</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">MY GLOW Waitlist Insights</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Real-time funnel snapshot for ideation and validation.
           </p>

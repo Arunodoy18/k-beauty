@@ -353,9 +353,9 @@ export function Component() {
 
       const slides = [
         {
-          title: "AI Skin Analysis for Indian Skin",
+          title: "Stop Guessing Your Skincare. Let AI Analyze Your Skin.",
           description:
-            "Get your personalized Korean skincare routine powered by AI. Built for Indian skin, climate, and concerns.",
+            "Discover exactly which ingredients and routine your skin needs for clear, glowing skin.",
           media: "https://images.unsplash.com/photo-1520975958225-48a2d8b0668f?auto=format&fit=crop&w=1600&q=80",
         },
         {
@@ -924,12 +924,12 @@ export function Component() {
         </span>
 
         <div className="slide-content">
-          <p className="slide-brand">GLOW AI</p>
+          <p className="slide-brand">MY GLOW</p>
           <h1 className="slide-title" id="mainTitle"></h1>
           <p className="slide-description" id="mainDesc"></p>
           <div className="slide-cta-row">
             <button className="slide-primary-cta" type="button" onClick={onPrimaryCtaClick}>
-              Scan My Skin
+              Get My Free Skin Report
             </button>
             <input
               className="slide-email-input"
@@ -938,6 +938,7 @@ export function Component() {
               aria-label="Email for early access"
             />
           </div>
+          <p className="slide-meta">AI skin analysis • Ingredient-based routine • Early access</p>
         </div>
 
         <nav className="slides-navigation" id="slidesNav"></nav>

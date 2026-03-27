@@ -243,6 +243,13 @@
   max-width: 36rem;
 }
 
+.lumina-root .slide-meta {
+  margin: 0.75rem 0 0;
+  font-size: 0.82rem;
+  color: rgba(26, 26, 26, 0.68);
+  letter-spacing: 0.04em;
+}
+
 .lumina-root .slide-primary-cta {
   min-height: 2.7rem;
   border: 0;
@@ -331,6 +338,120 @@
 
 .landing-stack {
   background: #fff5f7;
+}
+
+.landing-sections-shell {
+  margin: 0 auto;
+  width: min(1120px, 100%);
+  padding: clamp(2rem, 4vw, 3.5rem) 1rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.brand-block {
+  border: 1px solid rgba(205, 180, 219, 0.45);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 12px 28px rgba(205, 180, 219, 0.2);
+  padding: clamp(1rem, 2.5vw, 1.8rem);
+}
+
+.brand-block h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 2.3vw, 2rem);
+  color: #1a1a1a;
+}
+
+.brand-block h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #1a1a1a;
+}
+
+.brand-block p {
+  margin: 0.6rem 0 0;
+  color: rgba(26, 26, 26, 0.74);
+}
+
+.brand-problem-grid,
+.brand-trust-grid {
+  margin-top: 0.95rem;
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.brand-problem-grid p,
+.brand-trust-grid p {
+  margin: 0;
+  border-radius: 0.8rem;
+  padding: 0.75rem 0.85rem;
+  background: linear-gradient(140deg, #fff, #f8eef9);
+  border: 1px solid rgba(205, 180, 219, 0.35);
+}
+
+.brand-pill-list {
+  margin: 0.95rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.brand-pill-list li {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 77, 109, 0.32);
+  background: rgba(255, 77, 109, 0.08);
+  color: #7a2740;
+  padding: 0.36rem 0.7rem;
+  font-size: 0.83rem;
+}
+
+.brand-steps-grid {
+  margin-top: 0.95rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.brand-steps-grid article {
+  border-radius: 0.85rem;
+  border: 1px solid rgba(205, 180, 219, 0.4);
+  background: #fff;
+  padding: 0.85rem;
+}
+
+.brand-steps-grid span {
+  display: inline-flex;
+  height: 1.65rem;
+  width: 1.65rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(255, 77, 109, 0.14);
+  color: #7a2740;
+  font-weight: 700;
+  margin-bottom: 0.45rem;
+}
+
+.brand-ingredient-grid {
+  margin-top: 0.95rem;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.brand-ingredient-card {
+  gap: 0;
+  border-color: rgba(205, 180, 219, 0.4);
+  background: linear-gradient(160deg, #fff, #f9f1fb);
+}
+
+.brand-ingredient-card p {
+  margin: 0;
+  color: rgba(26, 26, 26, 0.75);
 }
 
 .argent-loop-section {
@@ -572,6 +693,19 @@
 }
 
 @media (max-width: 920px) {
+  .brand-problem-grid,
+  .brand-trust-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-steps-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-ingredient-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .argent-loop-section .minimap-wrapper {
     grid-template-columns: 1fr;
   }
@@ -583,6 +717,10 @@
 
 @media (max-width: 640px) {
   .lumina-root .slide-cta-row {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-ingredient-grid {
     grid-template-columns: 1fr;
   }
 

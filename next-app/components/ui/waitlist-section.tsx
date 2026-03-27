@@ -128,10 +128,10 @@ export function WaitlistSection() {
       <div className="waitlist-card">
         <div className="waitlist-badge">
           <Sparkles size={16} />
-          <span>GLOW AI</span>
+          <span>MY GLOW</span>
         </div>
 
-        <h2>Join the GLOW AI Early Access Waitlist</h2>
+        <h2>Join the MY GLOW Early Access Waitlist</h2>
         <p>
           Get your personalized Korean skincare routine powered by AI, built for Indian
           skin, climate, and concerns.
@@ -155,14 +155,14 @@ export function WaitlistSection() {
             disabled={isLoading}
             aria-busy={isLoading}
           >
-            {isLoading ? "Joining..." : "Join Waitlist"}
+            {isLoading ? "Generating Report..." : "Get My Free Skin Report"}
           </Button>
         </form>
 
         {submitted ? (
           <div className="waitlist-success" role="status" aria-live="polite">
             <CheckCircle2 size={16} />
-            <span>You&apos;re on the waitlist!</span>
+            <span>You&apos;re on the waitlist! We&apos;ll send your skin report soon.</span>
           </div>
         ) : null}
 
