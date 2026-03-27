@@ -1,0 +1,68 @@
+import { NextResponse } from "next/server"
+
+import { getSupabaseAdmin } from "@/lib/supabase"
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function detectDeviceType(userAgent = "") {
+  const ua = userAgent.toLowerCase()
+  if (ua.includes("ipad") || (ua.includes("android") && !ua.includes("mobile"))) {
+    return "tablet"
+  }
+  if (ua.includes("mobile") || ua.includes("iphone") || ua.includes("android")) {
+    return "mobile"
+  }
+  if (ua) return "desktop"
+  return "unknown"
+}
+
+export async function POST(request) {
+  try {
+    const body = await request.json()
+    const email = String(body?.email || "")
+      .trim()
+      .toLowerCase()
+    const userAgent = request.headers.get("user-agent") || ""
+
+    if (!email || !EMAIL_REGEX.test(email)) {
+      return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 })
+    }
+
+    const supabase = getSupabaseAdmin()
+    const { error } = await supabase.from("waitlist").insert({
+      email,
+      utm_source: body?.utmSource ? String(body.utmSource) : null,
+      utm_medium: body?.utmMedium ? String(body.utmMedium) : null,
+      utm_campaign: body?.utmCampaign ? String(body.utmCampaign) : null,
+      utm_term: body?.utmTerm ? String(body.utmTerm) : null,
+      utm_content: body?.utmContent ? String(body.utmContent) : null,
+      referrer: body?.referrer ? String(body.referrer) : request.headers.get("referer") || null,
+      landing_path: body?.path ? String(body.path) : null,
+      device_type: body?.deviceType ? String(body.deviceType) : detectDeviceType(userAgent),
+      user_agent: userAgent || null,
+    })
+
+    if (error) {
+      if (error.code === "23505") {
+        return NextResponse.json(
+          { error: "This email is already on the waitlist." },
+          { status: 409 }
+        )
+      }
+
+      console.error("Waitlist insert error:", error)
+      return NextResponse.json(
+        { error: "Something went wrong. Please try again." },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({ message: "You're on the waitlist!" }, { status: 201 })
+  } catch (error) {
+    console.error("Waitlist API error:", error)
+    return NextResponse.json(
+      { error: "Invalid request. Please try again." },
+      { status: 400 }
+    )
+  }
+}
