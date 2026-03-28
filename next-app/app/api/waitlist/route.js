@@ -4,6 +4,7 @@ import { applyRateLimit } from "@/lib/rate-limit"
 import { getSupabaseAdmin } from "@/lib/supabase"
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const MAX_EMAIL_LENGTH = 320
 
 function detectDeviceType(userAgent = "") {
   const ua = userAgent.toLowerCase()
@@ -15,6 +16,19 @@ function detectDeviceType(userAgent = "") {
   }
   if (ua) return "desktop"
   return "unknown"
+}
+
+async function getWaitlistNumber(supabase, id) {
+  const { count, error } = await supabase
+    .from("waitlist")
+    .select("id", { count: "exact", head: true })
+    .lte("id", id)
+
+  if (error) {
+    throw error
+  }
+
+  return count || 0
 }
 
 export async function POST(request) {
@@ -43,12 +57,14 @@ export async function POST(request) {
       .toLowerCase()
     const userAgent = request.headers.get("user-agent") || ""
 
-    if (!email || !EMAIL_REGEX.test(email)) {
+    if (!email || email.length > MAX_EMAIL_LENGTH || !EMAIL_REGEX.test(email)) {
       return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 })
     }
 
     const supabase = getSupabaseAdmin()
-    const { error } = await supabase.from("waitlist").insert({
+    const { data, error } = await supabase
+      .from("waitlist")
+      .insert({
       email,
       utm_source: body?.utmSource ? String(body.utmSource) : null,
       utm_medium: body?.utmMedium ? String(body.utmMedium) : null,
@@ -60,13 +76,29 @@ export async function POST(request) {
       device_type: body?.deviceType ? String(body.deviceType) : detectDeviceType(userAgent),
       user_agent: userAgent || null,
     })
+      .select("id")
+      .single()
 
     if (error) {
       if (error.code === "23505") {
-        return NextResponse.json(
-          { error: "This email is already on the waitlist." },
-          { status: 409 }
-        )
+        const existing = await supabase
+          .from("waitlist")
+          .select("id")
+          .eq("email", email)
+          .single()
+
+        if (!existing.error && existing.data?.id) {
+          const waitlistNumber = await getWaitlistNumber(supabase, existing.data.id)
+          return NextResponse.json(
+            {
+              error: "This email is already on the waitlist.",
+              waitlistNumber,
+            },
+            { status: 409 }
+          )
+        }
+
+        return NextResponse.json({ error: "This email is already on the waitlist." }, { status: 409 })
       }
 
       console.error("Waitlist insert error:", error)
@@ -76,7 +108,15 @@ export async function POST(request) {
       )
     }
 
-    return NextResponse.json({ message: "You're on the waitlist!" }, { status: 201 })
+    const waitlistNumber = await getWaitlistNumber(supabase, data.id)
+
+    return NextResponse.json(
+      {
+        message: "You're on the waitlist!",
+        waitlistNumber,
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error("Waitlist API error:", error)
     return NextResponse.json(

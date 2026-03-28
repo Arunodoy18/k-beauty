@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 export function WaitlistSection() {
   const [email, setEmail] = useState("")
   const [submitted, setSubmitted] = useState(false)
+  const [waitlistNumber, setWaitlistNumber] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
 
@@ -36,6 +37,7 @@ export function WaitlistSection() {
 
     setIsLoading(true)
     setError("")
+    setWaitlistNumber(null)
 
     void trackEvent("waitlist_submit_started", {
       email: normalizedEmail,
@@ -68,11 +70,16 @@ export function WaitlistSection() {
         }),
       })
 
-      const payload = (await response.json()) as { message?: string; error?: string }
+      const payload = (await response.json()) as {
+        message?: string
+        error?: string
+        waitlistNumber?: number
+      }
 
       if (!response.ok) {
         setSubmitted(false)
         setError(payload.error ?? "Something went wrong. Please try again.")
+        setWaitlistNumber(payload.waitlistNumber ?? null)
 
         void trackEvent(
           response.status === 409 ? "waitlist_submit_duplicate" : "waitlist_submit_error",
@@ -86,6 +93,7 @@ export function WaitlistSection() {
             metadata: {
               status: response.status,
               message: payload.error ?? "unknown_error",
+              waitlistNumber: payload.waitlistNumber ?? null,
             },
           }
         )
@@ -94,6 +102,7 @@ export function WaitlistSection() {
 
       setSubmitted(true)
       setEmail("")
+      setWaitlistNumber(payload.waitlistNumber ?? null)
 
       void trackEvent("waitlist_submit_success", {
         email: normalizedEmail,
@@ -102,10 +111,14 @@ export function WaitlistSection() {
         utmMedium: attribution.utmMedium,
         utmCampaign: attribution.utmCampaign,
         deviceType: attribution.deviceType,
+        metadata: {
+          waitlistNumber: payload.waitlistNumber ?? null,
+        },
       })
     } catch {
       setSubmitted(false)
       setError("Network error. Please check your connection and try again.")
+      setWaitlistNumber(null)
 
       void trackEvent("waitlist_submit_error", {
         email: normalizedEmail,
@@ -162,14 +175,22 @@ export function WaitlistSection() {
         {submitted ? (
           <div className="waitlist-success" role="status" aria-live="polite">
             <CheckCircle2 size={16} />
-            <span>You&apos;re on the waitlist! We&apos;ll send your skin report soon.</span>
+            <span>
+              You&apos;re on the waitlist!
+              {waitlistNumber
+                ? ` Your waitlist number is #${waitlistNumber}.`
+                : " We&apos;ll send your skin report soon."}
+            </span>
           </div>
         ) : null}
 
         {error ? (
           <div className="waitlist-error" role="alert" aria-live="assertive">
             <AlertCircle size={16} />
-            <span>{error}</span>
+            <span>
+              {error}
+              {waitlistNumber ? ` Your current waitlist number is #${waitlistNumber}.` : ""}
+            </span>
           </div>
         ) : null}
       </div>
