@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { applyRateLimit } from "@/lib/rate-limit"
 import { getSupabaseAdmin } from "@/lib/supabase"
 
 function detectDeviceType(userAgent = "") {
@@ -16,6 +17,24 @@ function detectDeviceType(userAgent = "") {
 
 export async function POST(request) {
   try {
+    const limiter = applyRateLimit({
+      request,
+      storeName: "waitlist-events",
+      keySuffix: "post",
+      limit: 60,
+      windowMs: 60_000,
+    })
+
+    if (!limiter.success) {
+      return NextResponse.json(
+        { error: "Too many requests. Please wait and try again." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(limiter.retryAfterSeconds) },
+        }
+      )
+    }
+
     const body = await request.json()
     const eventName = String(body?.eventName || "").trim()
     const payload = body?.payload && typeof body.payload === "object" ? body.payload : {}

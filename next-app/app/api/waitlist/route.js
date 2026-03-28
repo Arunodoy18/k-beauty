@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { applyRateLimit } from "@/lib/rate-limit"
 import { getSupabaseAdmin } from "@/lib/supabase"
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -18,6 +19,24 @@ function detectDeviceType(userAgent = "") {
 
 export async function POST(request) {
   try {
+    const limiter = applyRateLimit({
+      request,
+      storeName: "waitlist-submit",
+      keySuffix: "post",
+      limit: 6,
+      windowMs: 60_000,
+    })
+
+    if (!limiter.success) {
+      return NextResponse.json(
+        { error: "Too many requests. Please wait and try again." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(limiter.retryAfterSeconds) },
+        }
+      )
+    }
+
     const body = await request.json()
     const email = String(body?.email || "")
       .trim()

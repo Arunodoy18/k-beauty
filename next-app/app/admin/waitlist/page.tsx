@@ -4,6 +4,12 @@ import { getSupabaseAdmin } from "@/lib/supabase"
 
 export const dynamic = "force-dynamic"
 
+type WaitlistAdminPageProps = {
+  searchParams: Promise<{
+    token?: string
+  }>
+}
+
 type WaitlistEntry = {
   id: number
   email: string
@@ -21,7 +27,22 @@ function formatDate(value: string) {
   }).format(new Date(value))
 }
 
-export default async function WaitlistAdminPage() {
+export default async function WaitlistAdminPage({ searchParams }: WaitlistAdminPageProps) {
+  const params = await searchParams
+  const providedToken = params?.token || ""
+  const adminToken = process.env.ADMIN_DASHBOARD_TOKEN || ""
+
+  if (adminToken && providedToken !== adminToken) {
+    return (
+      <main className="mx-auto max-w-2xl px-4 py-16 text-center md:px-8">
+        <h1 className="text-2xl font-semibold tracking-tight">Admin Access Required</h1>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Add your admin token in the URL as <code>?token=...</code> to view insights.
+        </p>
+      </main>
+    )
+  }
+
   const supabase = getSupabaseAdmin()
   const now = new Date()
   const startOfDay = new Date(now)
@@ -74,7 +95,11 @@ export default async function WaitlistAdminPage() {
         </div>
 
         <Link
-          href="/api/waitlist/export"
+          href={
+            providedToken
+              ? `/api/waitlist/export?token=${encodeURIComponent(providedToken)}`
+              : "/api/waitlist/export"
+          }
           className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
         >
           Export CSV
