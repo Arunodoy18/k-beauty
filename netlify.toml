@@ -1,5 +1,5 @@
 [build]
-  command = "npm --prefix next-app run build"
+  command = "npm --prefix next-app ci --include=dev && npm --prefix next-app run build"
   publish = "next-app/.next"
 
 [build.environment]
