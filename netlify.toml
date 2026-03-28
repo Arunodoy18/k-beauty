@@ -1,7 +1,6 @@
 [build]
-  base = "next-app"
-  command = "npm run build"
-  publish = ".next"
+  command = "npm --prefix next-app run build"
+  publish = "next-app/.next"
 
 [build.environment]
   NODE_VERSION = "20"
