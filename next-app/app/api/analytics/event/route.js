@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { applyRateLimit } from "@/lib/rate-limit"
-import { getSupabaseAdmin } from "@/lib/supabase"
+import { getSupabaseAdmin, MissingEnvironmentError } from "@/lib/supabase"
 
 function detectDeviceType(userAgent = "") {
   const ua = userAgent.toLowerCase()
@@ -35,7 +35,14 @@ export async function POST(request) {
       )
     }
 
-    const body = await request.json()
+    let body = {}
+    try {
+      body = await request.json()
+    } catch (parseError) {
+      console.error("[analytics] invalid JSON body", parseError)
+      return NextResponse.json({ error: "Invalid request payload" }, { status: 400 })
+    }
+
     const eventName = String(body?.eventName || "").trim()
     const payload = body?.payload && typeof body.payload === "object" ? body.payload : {}
 
@@ -65,13 +72,29 @@ export async function POST(request) {
     })
 
     if (error) {
-      console.error("Event insert error:", error)
+      console.error("[analytics] event insert error", error)
       return NextResponse.json({ error: "Unable to store event" }, { status: 500 })
     }
 
+    console.info("[analytics] event stored", {
+      eventName,
+      path: payload.path ? String(payload.path) : null,
+    })
+
     return NextResponse.json({ ok: true }, { status: 201 })
   } catch (error) {
-    console.error("Event API error:", error)
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 })
+    if (error instanceof MissingEnvironmentError) {
+      console.error("[analytics] supabase env configuration error", error)
+      return NextResponse.json(
+        {
+          error:
+            "Server configuration error. Event logging is temporarily unavailable.",
+        },
+        { status: 500 }
+      )
+    }
+
+    console.error("[analytics] API error", error)
+    return NextResponse.json({ error: "Unable to process event" }, { status: 500 })
   }
 }

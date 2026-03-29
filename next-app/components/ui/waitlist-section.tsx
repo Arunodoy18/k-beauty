@@ -39,6 +39,11 @@ export function WaitlistSection() {
     setError("")
     setWaitlistNumber(null)
 
+    console.info("[waitlist-form] submit started", {
+      email: normalizedEmail,
+      path: attribution.path,
+    })
+
     void trackEvent("waitlist_submit_started", {
       email: normalizedEmail,
       path: attribution.path,
@@ -70,11 +75,28 @@ export function WaitlistSection() {
         }),
       })
 
-      const payload = (await response.json()) as {
+      let payload: {
         message?: string
         error?: string
         waitlistNumber?: number
+      } = {}
+
+      try {
+        payload = (await response.json()) as {
+          message?: string
+          error?: string
+          waitlistNumber?: number
+        }
+      } catch {
+        payload = {
+          error: response.ok ? undefined : "Unexpected server response. Please try again.",
+        }
       }
+
+      console.info("[waitlist-form] response received", {
+        status: response.status,
+        payload,
+      })
 
       if (!response.ok) {
         setSubmitted(false)
@@ -104,6 +126,11 @@ export function WaitlistSection() {
       setEmail("")
       setWaitlistNumber(payload.waitlistNumber ?? null)
 
+      console.info("[waitlist-form] submit succeeded", {
+        email: normalizedEmail,
+        waitlistNumber: payload.waitlistNumber ?? null,
+      })
+
       void trackEvent("waitlist_submit_success", {
         email: normalizedEmail,
         path: attribution.path,
@@ -115,10 +142,12 @@ export function WaitlistSection() {
           waitlistNumber: payload.waitlistNumber ?? null,
         },
       })
-    } catch {
+    } catch (submitError) {
       setSubmitted(false)
       setError("Network error. Please check your connection and try again.")
       setWaitlistNumber(null)
+
+      console.error("[waitlist-form] submit failed", submitError)
 
       void trackEvent("waitlist_submit_error", {
         email: normalizedEmail,
@@ -168,7 +197,7 @@ export function WaitlistSection() {
             disabled={isLoading}
             aria-busy={isLoading}
           >
-            {isLoading ? "Generating Report..." : "Get My Free Skin Report"}
+            {isLoading ? "Submitting..." : "Get My Free Skin Report"}
           </Button>
         </form>
 

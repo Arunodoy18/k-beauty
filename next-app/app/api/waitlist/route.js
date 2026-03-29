@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { applyRateLimit } from "@/lib/rate-limit"
-import { getSupabaseAdmin } from "@/lib/supabase"
+import { getSupabaseAdmin, MissingEnvironmentError } from "@/lib/supabase"
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MAX_EMAIL_LENGTH = 320
@@ -51,11 +51,23 @@ export async function POST(request) {
       )
     }
 
-    const body = await request.json()
+    let body = {}
+    try {
+      body = await request.json()
+    } catch (parseError) {
+      console.error("[waitlist] invalid JSON body", parseError)
+      return NextResponse.json({ error: "Invalid request payload." }, { status: 400 })
+    }
+
     const email = String(body?.email || "")
       .trim()
       .toLowerCase()
     const userAgent = request.headers.get("user-agent") || ""
+
+    console.info("[waitlist] submission received", {
+      email,
+      path: body?.path ? String(body.path) : null,
+    })
 
     if (!email || email.length > MAX_EMAIL_LENGTH || !EMAIL_REGEX.test(email)) {
       return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 })
@@ -89,6 +101,8 @@ export async function POST(request) {
 
         if (!existing.error && existing.data?.id) {
           const waitlistNumber = await getWaitlistNumber(supabase, existing.data.id)
+          console.info("[waitlist] duplicate email", { email, waitlistNumber })
+
           return NextResponse.json(
             {
               error: "This email is already on the waitlist.",
@@ -101,7 +115,7 @@ export async function POST(request) {
         return NextResponse.json({ error: "This email is already on the waitlist." }, { status: 409 })
       }
 
-      console.error("Waitlist insert error:", error)
+      console.error("[waitlist] insert error", error)
       return NextResponse.json(
         { error: "Something went wrong. Please try again." },
         { status: 500 }
@@ -109,6 +123,12 @@ export async function POST(request) {
     }
 
     const waitlistNumber = await getWaitlistNumber(supabase, data.id)
+
+    console.info("[waitlist] inserted successfully", {
+      email,
+      waitlistNumber,
+      id: data.id,
+    })
 
     return NextResponse.json(
       {
@@ -118,10 +138,21 @@ export async function POST(request) {
       { status: 201 }
     )
   } catch (error) {
-    console.error("Waitlist API error:", error)
+    if (error instanceof MissingEnvironmentError) {
+      console.error("[waitlist] supabase env configuration error", error)
+      return NextResponse.json(
+        {
+          error:
+            "Server configuration error. Please contact support if this persists.",
+        },
+        { status: 500 }
+      )
+    }
+
+    console.error("[waitlist] API error", error)
     return NextResponse.json(
-      { error: "Invalid request. Please try again." },
-      { status: 400 }
+      { error: "Something went wrong. Please try again." },
+      { status: 500 }
     )
   }
 }

@@ -1,6 +1,6 @@
 import Link from "next/link"
 
-import { getSupabaseAdmin } from "@/lib/supabase"
+import { getSupabaseAdmin, MissingEnvironmentError } from "@/lib/supabase"
 
 export const dynamic = "force-dynamic"
 
@@ -43,46 +43,60 @@ export default async function WaitlistAdminPage({ searchParams }: WaitlistAdminP
     )
   }
 
-  const supabase = getSupabaseAdmin()
-  const now = new Date()
-  const startOfDay = new Date(now)
-  startOfDay.setHours(0, 0, 0, 0)
+  let totalWaitlist = 0
+  let todayWaitlist = 0
+  let landingViews = 0
+  let submitStarts = 0
+  let recentEntries: WaitlistEntry[] = []
 
-  const [
-    totalWaitlistResult,
-    todayWaitlistResult,
-    pageViewResult,
-    submitStartResult,
-    recentWaitlistResult,
-  ] = await Promise.all([
-    supabase.from("waitlist").select("id", { count: "exact", head: true }),
-    supabase
-      .from("waitlist")
-      .select("id", { count: "exact", head: true })
-      .gte("created_at", startOfDay.toISOString()),
-    supabase
-      .from("waitlist_events")
-      .select("id", { count: "exact", head: true })
-      .eq("event_name", "landing_page_view"),
-    supabase
-      .from("waitlist_events")
-      .select("id", { count: "exact", head: true })
-      .eq("event_name", "waitlist_submit_started"),
-    supabase
-      .from("waitlist")
-      .select("id,email,created_at,utm_source,utm_campaign,landing_path,device_type")
-      .order("created_at", { ascending: false })
-      .limit(50),
-  ])
+  try {
+    const supabase = getSupabaseAdmin()
+    const now = new Date()
+    const startOfDay = new Date(now)
+    startOfDay.setHours(0, 0, 0, 0)
 
-  const totalWaitlist = totalWaitlistResult.count || 0
-  const todayWaitlist = todayWaitlistResult.count || 0
-  const landingViews = pageViewResult.count || 0
-  const submitStarts = submitStartResult.count || 0
+    const [
+      totalWaitlistResult,
+      todayWaitlistResult,
+      pageViewResult,
+      submitStartResult,
+      recentWaitlistResult,
+    ] = await Promise.all([
+      supabase.from("waitlist").select("id", { count: "exact", head: true }),
+      supabase
+        .from("waitlist")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", startOfDay.toISOString()),
+      supabase
+        .from("waitlist_events")
+        .select("id", { count: "exact", head: true })
+        .eq("event_name", "landing_page_view"),
+      supabase
+        .from("waitlist_events")
+        .select("id", { count: "exact", head: true })
+        .eq("event_name", "waitlist_submit_started"),
+      supabase
+        .from("waitlist")
+        .select("id,email,created_at,utm_source,utm_campaign,landing_path,device_type")
+        .order("created_at", { ascending: false })
+        .limit(50),
+    ])
+
+    totalWaitlist = totalWaitlistResult.count || 0
+    todayWaitlist = todayWaitlistResult.count || 0
+    landingViews = pageViewResult.count || 0
+    submitStarts = submitStartResult.count || 0
+    recentEntries = (recentWaitlistResult.data || []) as WaitlistEntry[]
+  } catch (error) {
+    if (error instanceof MissingEnvironmentError) {
+      console.error("[admin-waitlist] supabase env configuration error", error)
+    } else {
+      console.error("[admin-waitlist] failed to load analytics", error)
+    }
+  }
 
   const viewToSubmitRate = landingViews > 0 ? (submitStarts / landingViews) * 100 : 0
   const submitToSignupRate = submitStarts > 0 ? (totalWaitlist / submitStarts) * 100 : 0
-  const recentEntries = ((recentWaitlistResult.data || []) as WaitlistEntry[])
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 md:px-8">
