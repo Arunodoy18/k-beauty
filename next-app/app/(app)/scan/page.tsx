@@ -16,10 +16,59 @@ const MESSAGES = [
   "Building your K-beauty report..."
 ];
 
+const QUIZ_QUESTIONS = [
+  {
+    id: "skinFeel",
+    title: "How does your skin feel 2 hours after washing?",
+    type: "select",
+    options: ["Tight & dry", "Comfortable", "Slightly oily", "Very oily & shiny"]
+  },
+  {
+    id: "breakoutFrequency",
+    title: "How often do you get breakouts?",
+    type: "select",
+    options: ["Rarely", "Once a month", "Weekly", "Almost always"]
+  },
+  {
+    id: "poreVisibility",
+    title: "How visible are your pores?",
+    type: "select",
+    options: ["Not noticeable", "Slightly visible", "Large & visible"]
+  },
+  {
+    id: "sensitivity",
+    title: "Does your skin react to new products?",
+    type: "select",
+    options: ["Never reacts", "Sometimes", "Always reacts"]
+  },
+  {
+    id: "pigmentationScore",
+    title: "Rate your pigmentation / dark spots concern",
+    type: "slider",
+    label: "1 = none, 5 = very concerned"
+  },
+  {
+    id: "dullnessScore",
+    title: "Rate your skin dullness concern",
+    type: "slider",
+    label: "1 = none, 5 = very concerned"
+  }
+];
+
 export default function ScanPage() {
   const router = useRouter();
   
   const [state, setState] = useState<ScanState>("idle");
+  const [activeTab, setActiveTab] = useState<"camera" | "quiz">("camera");
+  const [currentQ, setCurrentQ] = useState(0);
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, any>>({
+    skinFeel: "",
+    breakoutFrequency: "",
+    poreVisibility: "",
+    sensitivity: "",
+    pigmentationScore: 3,
+    dullnessScore: 3
+  });
   const [capturedUrl, setCapturedUrl] = useState<string | null>(null);
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
@@ -115,14 +164,21 @@ export default function ScanPage() {
     setState("analyzing");
     
     try {
+      const payload: any = {
+        userId: "123e4567-e89b-12d3-a456-426614174000", // MOCK USER ID
+        city: "Mumbai" // MOCK CITY
+      };
+
+      if (activeTab === "camera") {
+        payload.photoBase64 = photoBase64;
+      } else {
+        payload.quizAnswers = quizAnswers;
+      }
+
       const res = await fetch("/api/analyze-skin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          photoBase64, 
-          userId: "123e4567-e89b-12d3-a456-426614174000", // MOCK USER ID
-          city: "Mumbai" // MOCK CITY
-        })
+        body: JSON.stringify(payload)
       });
       
       const data = await res.json();
@@ -169,8 +225,26 @@ export default function ScanPage() {
             exit={{ opacity: 0, y: -20 }}
             className="flex flex-col items-center w-full max-w-sm text-center"
           >
-            <h1 className="text-3xl mb-8" style={{ fontFamily: "Cormorant Garamond, serif" }}>AI Skin Scan</h1>
+            <h1 className="text-3xl mb-6" style={{ fontFamily: "Cormorant Garamond, serif" }}>AI Skin Scan</h1>
             
+            {/* TABS */}
+            <div className="flex bg-[#1F1015] rounded-full p-1 mb-8 w-full border border-[#3A2028]">
+              <button 
+                onClick={() => setActiveTab("camera")}
+                className={`flex-1 py-3 text-sm font-bold rounded-full transition-colors ${activeTab === "camera" ? "bg-[#3A2028] text-white" : "text-[#9A7A70]"}`}
+              >
+                Webcam Scan
+              </button>
+              <button 
+                onClick={() => setActiveTab("quiz")}
+                className={`flex-1 py-3 text-sm font-bold rounded-full transition-colors ${activeTab === "quiz" ? "bg-[#3A2028] text-white" : "text-[#9A7A70]"}`}
+              >
+                Skin Quiz
+              </button>
+            </div>
+
+            {activeTab === "camera" && (
+              <motion.div key="camera-tab" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col items-center w-full">
             <div className="relative w-[220px] h-[220px] mb-8 rounded-full flex items-center justify-center border border-[#3A2028] bg-[#1F1015]">
               <motion.div 
                 animate={{ rotate: 360 }}
@@ -212,8 +286,95 @@ export default function ScanPage() {
             
             <p className="mt-6 text-[10px] text-[#9A7A70] flex items-center justify-center gap-1">
               <span>??</span> Your photo is never stored
-            </p>
-          </motion.div>
+            </p>              </motion.div>
+            )}
+
+            {activeTab === "quiz" && (
+              <motion.div key="quiz-tab" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col items-center w-full">
+                <div className="w-full flex items-center mb-6">
+                  <div className="h-1 w-full bg-[#1F1015] rounded-full overflow-hidden">
+                    <motion.div 
+                      className="h-full bg-[#C49A6C]" 
+                      initial={{ width: `${(currentQ / QUIZ_QUESTIONS.length) * 100}%` }}
+                      animate={{ width: `${((currentQ + 1) / QUIZ_QUESTIONS.length) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-[#9A7A70] ml-3 whitespace-nowrap">{currentQ + 1} / {QUIZ_QUESTIONS.length}</span>
+                </div>
+
+                <AnimatePresence mode="wait">
+                  <motion.div 
+                    key={currentQ}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="w-full text-left"
+                  >
+                    <h2 className="text-2xl mb-8" style={{ fontFamily: 'Cormorant Garamond, serif' }}>
+                      {QUIZ_QUESTIONS[currentQ].title}
+                    </h2>
+                    
+                    {QUIZ_QUESTIONS[currentQ].type === "select" && (
+                      <div className="flex flex-col gap-3">
+                        {QUIZ_QUESTIONS[currentQ].options?.map((opt) => (
+                          <button
+                            key={opt}
+                            onClick={() => setQuizAnswers(prev => ({ ...prev, [QUIZ_QUESTIONS[currentQ].id]: opt }))}
+                            className={`p-4 rounded-xl border text-left transition-all ${quizAnswers[QUIZ_QUESTIONS[currentQ].id] === opt ? "border-[#D4856A] bg-[#D4856A]/10 text-[#F5EAE0]" : "border-[#3A2028] bg-[#1F1015] text-[#9A7A70]"}`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {QUIZ_QUESTIONS[currentQ].type === "slider" && (
+                      <div className="flex flex-col items-center gap-6 mt-4">
+                        <div className="text-6xl text-[#D4AF37]" style={{ fontFamily: 'Cormorant Garamond, serif' }}>
+                          {quizAnswers[QUIZ_QUESTIONS[currentQ].id]}
+                        </div>
+                        <input 
+                          type="range" 
+                          min="1" max="5" step="1"
+                          value={quizAnswers[QUIZ_QUESTIONS[currentQ].id] as number}
+                          onChange={(e) => setQuizAnswers(prev => ({ ...prev, [QUIZ_QUESTIONS[currentQ].id]: parseInt(e.target.value) }))}
+                          className="w-full accent-[#D4856A]"
+                        />
+                        <span className="text-sm text-[#9A7A70]">{QUIZ_QUESTIONS[currentQ].label}</span>
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+
+                <div className="flex gap-4 w-full mt-10">
+                  {currentQ > 0 && (
+                    <button 
+                      onClick={() => setCurrentQ(prev => prev - 1)}
+                      className="flex-1 bg-transparent border border-[#C49A6C] text-[#C49A6C] font-bold py-4 rounded-xl text-lg hover:bg-[#C49A6C]/10 transition-colors"
+                    >
+                      Back
+                    </button>
+                  )}
+                  {currentQ < QUIZ_QUESTIONS.length - 1 ? (
+                    <button 
+                      onClick={() => setCurrentQ(prev => prev + 1)}
+                      disabled={QUIZ_QUESTIONS[currentQ].type === "select" && !quizAnswers[QUIZ_QUESTIONS[currentQ].id]}
+                      className="flex-[2] bg-[#D4856A] text-white font-bold py-4 rounded-xl text-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                    >
+                      Continue →
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={handleAnalyze}
+                      disabled={QUIZ_QUESTIONS[currentQ].type === "select" && !quizAnswers[QUIZ_QUESTIONS[currentQ].id]}
+                      className="flex-[2] bg-[#D4856A] text-white font-bold py-4 rounded-xl text-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity whitespace-nowrap"
+                    >
+                      Analyze My Skin ✨
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            )}          </motion.div>
         )}
 
         {/* LIVE WEBCAM STATE */}
