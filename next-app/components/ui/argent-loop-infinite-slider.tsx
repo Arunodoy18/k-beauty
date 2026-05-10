@@ -13,44 +13,44 @@ type ProjectData = {
 
 const PROJECT_DATA: ProjectData[] = [
   {
-    title: "Redroom Gesture 14",
+    title: "Barrier Reset",
     image:
       "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=1964&auto=format&fit=crop",
-    category: "Concept Series",
-    year: "2025",
-    description: "Expressive motion study",
+    category: "Routine Phase",
+    year: "Phase 02",
+    description: "Skin profile and sensitivity mapping",
   },
   {
-    title: "Shadowwear 6AM",
+    title: "Centella Calm",
     image:
       "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=1887&auto=format&fit=crop",
-    category: "Photography",
-    year: "2024",
-    description: "Urban portrait series",
+    category: "Ingredient Logic",
+    year: "Phase 03",
+    description: "Concern-led AI analysis",
   },
   {
-    title: "Blur Formation 03",
+    title: "Rice Glow",
     image:
       "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=1964&auto=format&fit=crop",
-    category: "Kinetic Study",
-    year: "2024",
-    description: "Motion blur experiment",
+    category: "Brightening",
+    year: "Phase 04",
+    description: "Pigmentation-aware routine builder",
   },
   {
-    title: "Sunglass Operator",
+    title: "Daily SPF Ritual",
     image:
       "https://images.unsplash.com/photo-1572495641004-28421ae52e52?q=80&w=1887&auto=format&fit=crop",
-    category: "Editorial Motion",
-    year: "2023",
-    description: "Fashion editorial piece",
+    category: "Protection",
+    year: "Phase 04",
+    description: "Sun and pollution defense",
   },
   {
-    title: "Azure Figure 5",
+    title: "Curated Kits",
     image:
       "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1896&auto=format&fit=crop",
-    category: "Visual Research",
-    year: "2024",
-    description: "Color theory exploration",
+    category: "Commerce",
+    year: "Phase 05",
+    description: "Routine kits and replenishment",
   },
 ]
 

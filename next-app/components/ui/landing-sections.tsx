@@ -13,6 +13,14 @@ const INGREDIENTS: Ingredient[] = [
   { name: "Rice Water", benefit: "Brightening" },
 ]
 
+const PHASES = [
+  "Account creation and secure login",
+  "Skin profile and routine preferences",
+  "AI photo analysis for visible skin concerns",
+  "Personalized routine recommendations",
+  "Curated product kits and subscriptions",
+]
+
 export function LandingSections() {
   return (
     <div className="landing-sections-shell">
@@ -45,16 +53,28 @@ export function LandingSections() {
         <div className="brand-steps-grid">
           <article>
             <span>1</span>
-            <h3>Upload your photo</h3>
+            <h3>Create your account</h3>
           </article>
           <article>
             <span>2</span>
-            <h3>AI analyzes your skin</h3>
+            <h3>Build your skin profile</h3>
           </article>
           <article>
             <span>3</span>
-            <h3>Get your personalized routine</h3>
+            <h3>Unlock AI routine guidance</h3>
           </article>
+        </div>
+      </section>
+
+      <section className="brand-block" aria-label="Product phases section">
+        <h2>Product phases</h2>
+        <div className="brand-phase-list">
+          {PHASES.map((phase, index) => (
+            <article key={phase}>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <p>{phase}</p>
+            </article>
+          ))}
         </div>
       </section>
 

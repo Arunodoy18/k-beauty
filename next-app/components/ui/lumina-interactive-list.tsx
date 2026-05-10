@@ -2,8 +2,6 @@
 
 import React, { useEffect, useRef } from "react"
 
-import { getAttributionData, trackEvent } from "@/lib/analytics"
-
 type GsapLike = {
   to: (targets: unknown, vars: Record<string, unknown>) => unknown
   fromTo: (
@@ -63,21 +61,11 @@ export function Component() {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const onPrimaryCtaClick = () => {
-    const attribution = getAttributionData()
+    window.location.href = "/signup"
+  }
 
-    void trackEvent("hero_scan_click", {
-      path: attribution.path,
-      referrer: attribution.referrer,
-      utmSource: attribution.utmSource,
-      utmMedium: attribution.utmMedium,
-      utmCampaign: attribution.utmCampaign,
-      utmTerm: attribution.utmTerm,
-      utmContent: attribution.utmContent,
-      deviceType: attribution.deviceType,
-    })
-
-    const waitlist = document.getElementById("waitlist")
-    waitlist?.scrollIntoView({ behavior: "smooth", block: "start" })
+  const onSecondaryCtaClick = () => {
+    window.location.href = "/login"
   }
 
   useEffect(() => {
@@ -355,32 +343,32 @@ export function Component() {
         {
           title: "Stop Guessing Your Skincare. Let AI Analyze Your Skin.",
           description:
-            "Discover exactly which ingredients and routine your skin needs for clear, glowing skin.",
+            "Build a precise Korean skincare ritual for Indian skin, humidity, pigmentation, acne, and barrier care.",
           media: "https://images.unsplash.com/photo-1520975958225-48a2d8b0668f?auto=format&fit=crop&w=1600&q=80",
         },
         {
-          title: "Rose Mirage",
-          description: "Lost in a desert of blooming dreams and endless horizons.",
+          title: "Your Skin Profile Comes First.",
+          description: "Start with account, goals, sensitivities, budget, and routine habits before product suggestions.",
           media: "https://images.unsplash.com/photo-1520975693417-35b13a0f0f1f?auto=format&fit=crop&w=1600&q=80",
         },
         {
-          title: "Velvet Mystique",
-          description: "Wrapped in the deep, luxurious embrace of the night.",
+          title: "Ingredients Over Hype.",
+          description: "Niacinamide, centella, rice water, snail mucin, and sunscreen logic matched to real concerns.",
           media: "https://images.unsplash.com/photo-1520975714250-2573080d1f4d?auto=format&fit=crop&w=1600&q=80",
         },
         {
-          title: "Golden Hour",
-          description: "That fleeting moment when the world is dipped in gold.",
+          title: "Built For Indian Weather.",
+          description: "Routines that understand sweat, pollution, sun exposure, hard water, and seasonal shifts.",
           media: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80",
         },
         {
-          title: "Midnight Dreams",
-          description: "Where reality fades and imagination takes flight.",
+          title: "AI Analysis, Human Trust.",
+          description: "Photo-based insights will be framed clearly, with careful guidance and transparent next steps.",
           media: "https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=1600&q=80",
         },
         {
-          title: "Silver Light",
-          description: "A cool, metallic shimmer reflecting the urban pulse.",
+          title: "From Ritual To Restock.",
+          description: "The product roadmap ends in curated kits, replenishment, and progress tracking.",
           media: "https://images.unsplash.com/photo-1482192596544-9eb780fc7f66?auto=format&fit=crop&w=1600&q=80",
         },
       ]
@@ -929,16 +917,13 @@ export function Component() {
           <p className="slide-description" id="mainDesc"></p>
           <div className="slide-cta-row">
             <button className="slide-primary-cta" type="button" onClick={onPrimaryCtaClick}>
-              Get My Free Skin Report
+              Start My Skin Profile
             </button>
-            <input
-              className="slide-email-input"
-              type="email"
-              placeholder="Enter your email for early access"
-              aria-label="Email for early access"
-            />
+            <button className="slide-secondary-cta" type="button" onClick={onSecondaryCtaClick}>
+              Log in
+            </button>
           </div>
-          <p className="slide-meta">AI skin analysis • Ingredient-based routine • Early access</p>
+          <p className="slide-meta">AI skin analysis | Ingredient-based routine | Phased product</p>
         </div>
 
         <nav className="slides-navigation" id="slidesNav"></nav>
