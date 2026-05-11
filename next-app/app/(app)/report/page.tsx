@@ -3,11 +3,12 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { 
-  Droplets, AlertCircle, Sun, Activity, Maximize,
+  Droplets, AlertCircle, Sun, Activity, Maximize, MapPin,
   Share2, Download, RefreshCw, ArrowRight, Sparkles, ChevronDown, CheckCircle2
 } from "lucide-react";
+import { useAppContext } from "@/components/app/app-context";
 
 // Mock Data (In real app, fetch via reportId or global store)
 const MOCK_REPORT = {
@@ -53,9 +54,65 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
 };
 
+const getConcernIcon = (name?: string) => {
+  const key = (name || "").toLowerCase();
+  if (key.includes("acne") || key.includes("blemish")) return AlertCircle;
+  if (key.includes("pigment") || key.includes("spot")) return Sun;
+  if (key.includes("hydration") || key.includes("dry")) return Droplets;
+  if (key.includes("texture") || key.includes("pore")) return Activity;
+  return Maximize;
+};
+
+const formatReportDate = (value?: string) => {
+  if (!value) return "Today";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Today";
+  return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+};
+
+const mapReportToUi = (data: any, fallbackCity: string) => {
+  const concerns = Array.isArray(data?.concerns) ? data.concerns : [];
+  const insights = Array.isArray(data?.insights) ? data.insights : [];
+  const defaultIngredient = concerns[0]?.recommendedIngredient || "Niacinamide";
+
+  return {
+    score: typeof data?.overall_glow_score === "number" ? data.overall_glow_score : 0,
+    city: data?.city || fallbackCity,
+    date: formatReportDate(data?.created_at),
+    concerns: concerns.length
+      ? concerns.map((concern: any, idx: number) => ({
+          id: `concern-${idx}`,
+          name: concern?.name || "Concern",
+          icon: getConcernIcon(concern?.name),
+          score: typeof concern?.score === "number" ? concern.score : 0,
+          severity: concern?.severity || "Moderate",
+          aiText: concern?.explanation || "No additional details available yet.",
+        }))
+      : MOCK_REPORT.concerns,
+    insights: insights.length
+      ? insights.map((insight: any, idx: number) => ({
+          id: `insight-${idx}`,
+          title: insight?.finding || "Insight",
+          text: insight?.explanation || "No additional details available yet.",
+          ingredient: insight?.recommendedIngredient || defaultIngredient,
+        }))
+      : MOCK_REPORT.insights,
+    climate: {
+      city: data?.city || fallbackCity,
+      text: data?.climate_note || MOCK_REPORT.climate.text,
+    },
+  };
+};
+
 export default function ReportPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { userId } = useAppContext();
+  const reportId = searchParams.get("id") || searchParams.get("reportId");
+  const fallbackCity = searchParams.get("city") || MOCK_REPORT.city;
   const [report, setReport] = useState(MOCK_REPORT);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [expandedConcern, setExpandedConcern] = useState<string | null>(null);
   const reportRef = useRef<HTMLDivElement>(null);
 
@@ -87,6 +144,52 @@ export default function ReportPage() {
   const handleDownload = () => {
     window.print(); // Simple fallback for PDF export
   };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadReport = async () => {
+      if (!reportId || !userId) {
+        setIsLoading(false);
+        if (!reportId) {
+          setErrorMessage("Missing report id.");
+        }
+        return;
+      }
+
+      setIsLoading(true);
+      setErrorMessage(null);
+
+      try {
+        const res = await fetch(
+          `/api/get-routine?reportId=${encodeURIComponent(reportId)}&userId=${encodeURIComponent(userId)}`
+        );
+        const payload = await res.json();
+
+        if (!res.ok || !payload?.success) {
+          throw new Error(payload?.message || "Unable to load report.");
+        }
+
+        const nextReport = mapReportToUi(payload.data?.report, fallbackCity);
+        if (isMounted) {
+          setReport(nextReport);
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          setErrorMessage(err?.message || "Unable to load report.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadReport();
+    return () => {
+      isMounted = false;
+    };
+  }, [reportId, userId, fallbackCity]);
 
   return (
     <div className="min-h-screen bg-[#0F172A] text-white font-sans pb-24 overflow-x-hidden" ref={reportRef}>
@@ -141,6 +244,19 @@ export default function ReportPage() {
             </div>
           </div>
         </motion.div>
+
+        {(isLoading || errorMessage) && (
+          <motion.div variants={itemVariants} className="px-6 mb-6">
+            {isLoading && (
+              <div className="text-xs text-gray-400">Loading your report...</div>
+            )}
+            {errorMessage && (
+              <div className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                {errorMessage}
+              </div>
+            )}
+          </motion.div>
+        )}
 
         {/* CONCERN CARDS (Horizontal Scroll) */}
         <motion.div variants={itemVariants} className="mb-10 w-full">
@@ -237,21 +353,27 @@ export default function ReportPage() {
         {/* ROUTINE PREVIEW */}
         <motion.div variants={itemVariants} className="px-6 mb-10">
           <div className="bg-[#D4AF37]/10 border border-[#D4AF37]/20 rounded-3xl p-6 text-center shadow-[0_0_30px_rgba(212,175,55,0.05)]">
-            <h2 className="text-lg font-semibold text-white mb-6">Your 4-step K-Beauty routine is ready</h2>
+            <h2 className="text-lg font-semibold text-white mb-6">Your 5-step K-Beauty routine is ready</h2>
             
             <div className="flex items-center justify-center gap-2 mb-8">
-              {[1, 2, 3, 4].map((step, idx) => (
+              {[1, 2, 3, 4, 5].map((step, idx) => (
                 <div key={idx} className="flex items-center gap-2">
                   <div className="w-12 h-12 rounded-full bg-[#111827] border border-[#D4AF37]/30 flex items-center justify-center shadow-inner relative">
                     <span className="text-[#D4AF37] font-bold text-sm">0{step}</span>
                   </div>
-                  {idx < 3 && <div className="w-4 h-[1px] bg-[#D4AF37]/30" />}
+                  {idx < 4 && <div className="w-4 h-[1px] bg-[#D4AF37]/30" />}
                 </div>
               ))}
             </div>
 
             <button 
-              onClick={() => router.push("/routine")}
+              onClick={() =>
+                router.push(
+                  reportId
+                    ? `/routine?reportId=${encodeURIComponent(reportId)}`
+                    : "/routine"
+                )
+              }
               className="w-full bg-[#D4AF37] text-[#0F172A] py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 hover:bg-[#D4AF37]/90 active:scale-[0.98] transition-all"
             >
               See My Routine Kit <ArrowRight className="w-5 h-5" />

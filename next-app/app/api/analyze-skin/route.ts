@@ -1,118 +1,155 @@
 
-import { NextResponse } from "next/server";
-import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+import { NextRequest, NextResponse } from "next/server";
+import { parseGeminiJSON, skinModel } from "@/lib/gemini";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+export async function POST(req: NextRequest) {
+  const supabase = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
-const getSupabaseAdmin = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("Missing Supabase environment variables");
-  }
-
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
-};
-
-export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { photoBase64, userId, city } = body;
+    const { photoBase64, quizAnswers, userId, city } = await req.json();
 
     if (!userId) {
-      return NextResponse.json({ error: "unauthorized", message: "User ID is required" }, { status: 401 });
+      return NextResponse.json(
+        { error: "missing_field", message: "userId is required" },
+        { status: 400 }
+      );
     }
 
     if (!city) {
-      return NextResponse.json({ error: "bad_request", message: "City is required for climate analysis" }, { status: 400 });
+      return NextResponse.json(
+        { error: "missing_field", message: "city is required" },
+        { status: 400 }
+      );
     }
 
-    if (!photoBase64) {
-      return NextResponse.json({ error: "bad_request", message: "photoBase64 is required" }, { status: 400 });
+    if (!photoBase64 && !quizAnswers) {
+      return NextResponse.json(
+        { error: "missing_field", message: "Send either photoBase64 or quizAnswers" },
+        { status: 400 }
+      );
     }
 
-    const supabase = getSupabaseAdmin();
-
-    // Rate Limiting: 1 scan per user per 24 hours
-    const { data: recentScans } = await supabase
+    // -- RATE LIMIT: 1 scan per user per 24h --
+    const since = new Date(Date.now() - 86400000).toISOString();
+    const { data: recent } = await supabase
       .from("skin_reports")
-      .select("created_at")
+      .select("id")
       .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(1);
+      .gte("created_at", since)
+      .single();
 
-    if (recentScans && recentScans.length > 0) {
-      const lastScanDate = new Date(recentScans[0].created_at);
-      const now = new Date();
-      const diffInHours = (now.getTime() - lastScanDate.getTime()) / (1000 * 60 * 60);
-
-      if (diffInHours < 24) {
-        return NextResponse.json({ 
-          error: "rate_limited", 
-          message: "Only 1 scan per 24 hours is allowed. Please try again tomorrow." 
-        }, { status: 429 });
-      }
+    if (recent) {
+      return NextResponse.json(
+        {
+          error: "rate_limited",
+          message: "You already scanned today. Check back tomorrow.",
+        },
+        { status: 429 }
+      );
     }
 
-    // STEP 1 — Strip the base64 prefix
-    const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, "");
+    const systemPrompt = `You are an expert Korean skincare dermatologist
+specializing in Indian skin types. Indian skin has higher melanin (prone to
+post-inflammatory hyperpigmentation), varies greatly by city climate, and has
+different oiliness patterns. The user is from ${city}.
+Return ONLY raw valid JSON - no markdown, no backticks, no explanation.
+Just the JSON object.`;
 
-    // STEP 2 — Call OpenAI GPT Vision
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o", // Swap to gpt-5 when access is available
-      max_tokens: 1200,
-      messages: [
-        {
-          role: "system",
-          content: `You are an expert Korean skincare dermatologist specializing in Indian skin.\nIndian skin has higher melanin (prone to PIH), varies by city climate, and has different oiliness than East Asian skin.\nThe user is from ${city}. Analyze their skin photo carefully.\nReturn ONLY valid JSON — no markdown, no explanation, just raw JSON.`
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "image_url",
-              image_url: { url: `data:image/jpeg;base64,${base64Data}`, detail: "high" }
+    const jsonSchema = `{
+  "overallGlowScore": number between 0-100,
+  "skinType": "oily" | "dry" | "combination" | "normal" | "sensitive",
+  "concerns": [
+    {
+      "name": string,
+      "score": number (0-100, higher = more concern),
+      "severity": "mild" | "moderate" | "high",
+      "explanation": string (2 sentences personalized for Indian skin),
+      "recommendedIngredient": string
+    }
+  ],
+  "insights": [
+    { "finding": string, "explanation": string }
+  ],
+  "climateNote": string (skincare advice specific to ${city} weather and pollution),
+  "routineComplexity": "basic" | "intermediate" | "advanced"
+}`;
+
+    let result;
+
+    // -- PATH 1: PHOTO ANALYSIS --
+    try {
+      if (photoBase64) {
+        const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, "");
+
+        result = await skinModel.generateContent([
+          systemPrompt,
+          {
+            inlineData: {
+              mimeType: "image/jpeg",
+              data: base64Data,
             },
-            {
-              type: "text",
-              text: `Analyze this person s skin. Return this exact JSON:\n{\n  "overallGlowScore": number (0-100),\n  "skinType": "oily" | "dry" | "combination" | "normal" | "sensitive",\n  "concerns": [\n    {\n      "name": string,\n      "score": number (0-100, higher = worse),\n      "severity": "mild" | "moderate" | "high",\n      "explanation": string (2 sentences, personalized for Indian skin),\n      "recommendedIngredient": string\n    }\n  ],\n  "insights": [\n    { "finding": string, "explanation": string }\n  ],\n  "climateNote": string (advice specific to ${city} climate),\n  "routineComplexity": "basic" | "intermediate" | "advanced"\n}`
-            }
-          ]
-        }
-      ]
-    });
+          },
+          `Analyze this person's skin photo carefully.
+Focus on: texture, oiliness/dryness, visible pores, acne or blemishes,
+pigmentation or dark spots, skin tone evenness, hydration levels,
+and any redness or sensitivity signs.
+Return this exact JSON schema:
+${jsonSchema}`,
+        ]);
+      } else if (quizAnswers) {
+        result = await skinModel.generateContent([
+          systemPrompt,
+          `Based on this skin quiz data from a user in ${city}:
+${JSON.stringify(quizAnswers, null, 2)}
 
-    // STEP 3 — Parse and validate
-    const raw = completion.choices[0].message.content ?? "";
-    
+Quiz key:
+- skinFeel: how skin feels 2hrs after washing
+- breakoutFrequency: how often they get breakouts
+- poreVisibility: how visible their pores are
+- sensitivity: how often skin reacts to products
+- pigmentationScore: 1-5 (5 = very concerned)
+- dullnessScore: 1-5 (5 = very concerned)
+
+Generate an accurate skin report estimate.
+Return this exact JSON schema:
+${jsonSchema}`,
+        ]);
+      }
+    } catch (err: any) {
+      if (err.message?.includes("SAFETY")) {
+        return NextResponse.json(
+          {
+            error: "unclear_image",
+            message: "Please retake in better lighting with a clear face shot.",
+          },
+          { status: 422 }
+        );
+      }
+
+      console.error("Gemini error:", err);
+      return NextResponse.json(
+        { error: "ai_error", message: "Failed to analyze the skin report." },
+        { status: 500 }
+      );
+    }
+
+    // -- PARSE GEMINI RESPONSE --
+    const raw = result?.response.text() ?? "";
     let report;
     try {
-      // Strip markdown code blocks if the model accidentally includes them
-      const jsonStr = raw.replace(/```json/g, "").replace(/```/g, "").trim();
-      report = JSON.parse(jsonStr);
-    } catch (e) {
-      console.error("Failed to parse OpenAI JSON:", raw);
-      return NextResponse.json({ error: "parse_failed", message: "Could not read skin report" }, { status: 500 });
+      report = parseGeminiJSON(raw);
+    } catch (err) {
+      return NextResponse.json(
+        { error: "parse_failed", message: "Could not read the skin analysis. Please retake." },
+        { status: 500 }
+      );
     }
 
-    // Safety fallback for bad images determined by the model text
-    if (report.error || report.unclear_image) {
-      return NextResponse.json({ 
-        error: "unclear_image", 
-        message: report.message || "Please retake in better lighting" 
-      }, { status: 400 });
-    }
-
-    // STEP 4 — Save to Supabase
+    // -- SAVE TO SUPABASE --
     const { data: saved, error: dbError } = await supabase
       .from("skin_reports")
       .insert({
@@ -129,28 +166,21 @@ export async function POST(req: Request) {
 
     if (dbError) {
       console.error("Supabase insert error:", dbError);
-      // Return with temp ID if db fails
+      // Still return the report even if DB save fails
       return NextResponse.json({
-        reportId: `temp_${Date.now()}`,
-        ...report
+        success: true,
+        data: { reportId: "temp-" + Date.now(), ...report },
       });
     }
 
-    // STEP 5 — Return
     return NextResponse.json({
-      reportId: saved.id,
-      ...report
+      success: true,
+      data: { reportId: saved.id, ...report },
     });
-
-  } catch (error: any) {
-    console.error("API Error in analyze-skin:", error);
-
-    if (error?.status === 400 && error?.error?.message?.includes("image")) {
-       return NextResponse.json({ error: "unclear_image", message: "Please retake in better lighting" }, { status: 400 });
-    }
-
+  } catch (err: any) {
+    console.error("Analyze skin error:", err);
     return NextResponse.json(
-      { error: "server_error", message: "An unexpected error occurred while analyzing your skin." }, 
+      { error: "server_error", message: "Something went wrong. Please try again." },
       { status: 500 }
     );
   }

@@ -21,6 +21,10 @@ function CheckoutWizard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const total = parseInt(searchParams.get("total") || "2996");
+  const paymentsEnabled = Boolean(
+    process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID &&
+      process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID !== "rzp_test_placeholder_key"
+  );
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -47,6 +51,10 @@ function CheckoutWizard() {
   }, [paymentSuccess, router]);
 
   const handlePayment = async () => {
+    if (!paymentsEnabled) {
+      alert("Payments are temporarily disabled. Please check back soon.");
+      return;
+    }
     setLoading(true);
     try {
       // 1. Create order on our backend
@@ -63,7 +71,7 @@ function CheckoutWizard() {
 
       // 2. Initialize Razorpay
       const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_placeholder_key",
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: orderData.amount,
         currency: "INR",
         name: "MY GLOW",
@@ -155,7 +163,9 @@ function CheckoutWizard() {
 
   return (
     <div className="min-h-screen bg-[#0F172A] text-white font-sans pb-32">
-      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
+      {paymentsEnabled && (
+        <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
+      )}
       
       <div className="max-w-md mx-auto pt-6">
         {/* HEADER */}
@@ -246,6 +256,11 @@ function CheckoutWizard() {
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
+                {!paymentsEnabled && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 text-amber-200 text-sm rounded-xl px-4 py-3">
+                    Payments are temporarily disabled. Please check back soon.
+                  </div>
+                )}
                 <div className="bg-[#111827] border border-gray-800 p-5 rounded-2xl">
                   <h3 className="font-bold mb-3 flex items-center gap-2"><MapPin className="w-4 h-4 text-[#D4AF37]"/> Ship To</h3>
                   <p className="text-sm text-gray-300">{form.name}</p>
@@ -283,13 +298,19 @@ function CheckoutWizard() {
             {step === 2 && (
               <button 
                 onClick={handlePayment} 
-                disabled={loading}
-                className="w-full bg-gradient-to-r from-rose-500 to-rose-600 text-white font-bold py-4 rounded-xl text-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-70 shadow-[0_0_20px_rgba(244,63,94,0.3)]"
+                disabled={loading || !paymentsEnabled}
+                className={`w-full bg-gradient-to-r from-rose-500 to-rose-600 text-white font-bold py-4 rounded-xl text-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-70 shadow-[0_0_20px_rgba(244,63,94,0.3)] ${
+                  paymentsEnabled ? "" : "cursor-not-allowed"
+                }`}
               >
                 {loading ? (
                   <span className="animate-pulse">Initializing Setup...</span>
                 ) : (
-                  <><Lock className="w-5 h-5" /> Pay ?{total} securely</>
+                  paymentsEnabled ? (
+                    <><Lock className="w-5 h-5" /> Pay ?{total} securely</>
+                  ) : (
+                    "Payments disabled"
+                  )
                 )}
               </button>
             )}

@@ -5,16 +5,12 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Camera, Upload, Sun, Sparkles, User, RefreshCw, AlertCircle, FlipHorizontal } from "lucide-react";
+import { useAppContext } from "@/components/app/app-context";
+import { getSupabaseBrowserClient } from "@/lib/supabase";
 
 type ScanState = "idle" | "live" | "preview" | "analyzing" | "error";
 
-const MESSAGES = [
-  "Reading skin texture...",
-  "Detecting hydration levels...",
-  "Mapping pigmentation zones...",
-  "Checking pore health...",
-  "Building your K-beauty report..."
-];
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 const QUIZ_QUESTIONS = [
   {
@@ -57,6 +53,8 @@ const QUIZ_QUESTIONS = [
 
 export default function ScanPage() {
   const router = useRouter();
+  const { userId } = useAppContext();
+  const [profileCity, setProfileCity] = useState("Mumbai");
   
   const [state, setState] = useState<ScanState>("idle");
   const [activeTab, setActiveTab] = useState<"camera" | "quiz">("camera");
@@ -72,24 +70,92 @@ export default function ScanPage() {
   const [capturedUrl, setCapturedUrl] = useState<string | null>(null);
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [cameraError, setCameraError] = useState<"denied" | "notfound" | null>(null);
+  const [toastMessage, setToastMessage] = useState("");
+  const [showSlowMessage, setShowSlowMessage] = useState(false);
+  const [showLongMessage, setShowLongMessage] = useState(false);
+  const [retakeCount, setRetakeCount] = useState(0);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
   const [msgIndex, setMsgIndex] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const slowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const analysisTimedOutRef = useRef(false);
+
+  useEffect(() => {
+    let isActive = true;
+
+    if (!userId) return;
+
+    const loadProfile = async () => {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const { data, error } = await supabase
+          .from("user_profiles")
+          .select("city")
+          .eq("id", userId)
+          .maybeSingle();
+
+        if (error) throw error;
+        if (isActive && data?.city) {
+          setProfileCity(data.city);
+        }
+      } catch (err) {
+        console.error("Failed to load user profile.", err);
+      }
+    };
+
+    loadProfile();
+
+    return () => {
+      isActive = false;
+    };
+  }, [userId]);
+
+  const messages = [
+    "Reading skin texture...",
+    "Detecting hydration levels...",
+    "Mapping pigmentation zones...",
+    "Checking pore health...",
+    "Analyzing for Indian skin type...",
+    "Applying climate data for " + profileCity + "...",
+    "Building your K-beauty routine..."
+  ];
+  const messageCount = messages.length;
 
   // Rotating messages during analysis
   useEffect(() => {
     if (state === "analyzing") {
+      setMsgIndex(0);
       const interval = setInterval(() => {
-        setMsgIndex((prev) => (prev + 1) % MESSAGES.length);
+        setMsgIndex((prev) => (prev + 1) % messageCount);
       }, 2500);
       return () => clearInterval(interval);
     }
-  }, [state]);
+  }, [state, messageCount]);
+
+  useEffect(() => {
+    return () => {
+      if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+      if (longTimerRef.current) clearTimeout(longTimerRef.current);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage("");
+    }, 3000);
+  };
 
   const startCamera = async () => {
+    setCameraError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: facingMode }
@@ -98,8 +164,18 @@ export default function ScanPage() {
         videoRef.current.srcObject = stream;
       }
       setState("live");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      if (err?.name === "NotAllowedError") {
+        setCameraError("denied");
+        setState("live");
+        return;
+      }
+      if (err?.name === "NotFoundError") {
+        setCameraError("notfound");
+        setState("live");
+        return;
+      }
       setErrorMsg("Enable camera in browser settings to continue.");
       setState("error");
     }
@@ -116,6 +192,16 @@ export default function ScanPage() {
     stopCamera();
     setFacingMode(prev => prev === "user" ? "environment" : "user");
     setTimeout(startCamera, 300);
+  };
+
+  const switchToQuiz = () => {
+    stopCamera();
+    setCameraError(null);
+    setActiveTab("quiz");
+    setState("idle");
+    setCapturedUrl(null);
+    setPhotoBase64(null);
+    setCurrentQ(0);
   };
 
   const capturePhoto = () => {
@@ -148,6 +234,11 @@ export default function ScanPage() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_FILE_BYTES) {
+      showToast("Photo too large. Please use one under 5MB.");
+      e.target.value = "";
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -161,12 +252,34 @@ export default function ScanPage() {
   };
 
   const handleAnalyze = async () => {
+    if (!userId) {
+      setErrorMsg("Please sign in to continue.");
+      setState("error");
+      return;
+    }
     setState("analyzing");
+    analysisTimedOutRef.current = false;
+    setShowSlowMessage(false);
+    setShowLongMessage(false);
+    if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+    if (longTimerRef.current) clearTimeout(longTimerRef.current);
+
+    slowTimerRef.current = setTimeout(() => {
+      setShowSlowMessage(true);
+    }, 15000);
+
+    longTimerRef.current = setTimeout(() => {
+      analysisTimedOutRef.current = true;
+      setShowLongMessage(true);
+      setTimeout(() => {
+        router.push("/");
+      }, 1500);
+    }, 30000);
     
     try {
       const payload: any = {
-        userId: "123e4567-e89b-12d3-a456-426614174000", // MOCK USER ID
-        city: "Mumbai" // MOCK CITY
+        userId,
+        city: profileCity
       };
 
       if (activeTab === "camera") {
@@ -184,7 +297,9 @@ export default function ScanPage() {
       const data = await res.json();
       
       if (data.reportId) {
-        router.push("/report?id=" + data.reportId);
+        if (!analysisTimedOutRef.current) {
+          router.push("/report?id=" + data.reportId);
+        }
       } else {
         throw new Error(data.message || "Failed to analyze skin");
       }
@@ -192,6 +307,9 @@ export default function ScanPage() {
       console.error(err);
       setErrorMsg("Analysis failed. " + err.message);
       setState("error");
+    } finally {
+      if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+      if (longTimerRef.current) clearTimeout(longTimerRef.current);
     }
   };
 
@@ -200,6 +318,7 @@ export default function ScanPage() {
     setCapturedUrl(null);
     setPhotoBase64(null);
     setErrorMsg("");
+    setCameraError(null);
   };
 
   return (
@@ -209,6 +328,7 @@ export default function ScanPage() {
       <input 
         type="file" 
         accept="image/*" 
+        data-max-size={MAX_FILE_BYTES}
         ref={fileInputRef} 
         onChange={handleFileUpload} 
         className="hidden" 
@@ -286,7 +406,16 @@ export default function ScanPage() {
             
             <p className="mt-6 text-[10px] text-[#9A7A70] flex items-center justify-center gap-1">
               <span>??</span> Your photo is never stored
-            </p>              </motion.div>
+            </p>
+            {retakeCount > 3 && (
+              <button
+                onClick={switchToQuiz}
+                className="mt-4 text-xs text-[#C49A6C] underline underline-offset-4"
+              >
+                Having trouble? The quiz gives equally accurate results →
+              </button>
+            )}
+            </motion.div>
             )}
 
             {activeTab === "quiz" && (
@@ -387,47 +516,94 @@ export default function ScanPage() {
             className="flex flex-col items-center w-full max-w-sm"
           >
             <div className="relative w-[280px] h-[380px] rounded-[100px] overflow-hidden mb-8 border border-[#3A2028] bg-[#1F1015] shadow-[0_0_40px_rgba(196,154,108,0.15)] flex justify-center items-center">
-              
-              <video 
-                ref={videoRef} 
-                autoPlay 
-                playsInline 
-                muted 
-                className="absolute inset-0 w-full h-full object-cover"
-                style={{ transform: facingMode === "user" ? "scaleX(-1)" : "none" }}
-              />
+              {!cameraError && (
+                <>
+                  <video 
+                    ref={videoRef} 
+                    autoPlay 
+                    playsInline 
+                    muted 
+                    className="absolute inset-0 w-full h-full object-cover"
+                    style={{ transform: facingMode === "user" ? "scaleX(-1)" : "none" }}
+                  />
 
-              {/* Face Target Ellipse */}
-              <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox="0 0 280 380">
-                <ellipse cx="140" cy="190" rx="90" ry="120" fill="none" stroke="#C49A6C" strokeWidth="2" strokeDasharray="8 8" opacity="0.6"/>
-              </svg>
+                  {/* Face Target Ellipse */}
+                  <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox="0 0 280 380">
+                    <ellipse cx="140" cy="190" rx="90" ry="120" fill="none" stroke="#C49A6C" strokeWidth="2" strokeDasharray="8 8" opacity="0.6"/>
+                  </svg>
 
-              {/* Scanning laser animation overlay */}
-              <motion.div 
-                animate={{ top: ["0%", "100%", "0%"] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#C49A6C] to-transparent opacity-60 z-20 shadow-[0_0_10px_#C49A6C]"
-              />
+                  {/* Scanning laser animation overlay */}
+                  <motion.div 
+                    animate={{ top: ["0%", "100%", "0%"] }}
+                    transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                    className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#C49A6C] to-transparent opacity-60 z-20 shadow-[0_0_10px_#C49A6C]"
+                  />
+                </>
+              )}
+              {cameraError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-[#0D0608]/70">
+                  <div className="w-44 h-44 rounded-full border border-[#3A2028] bg-[#1F1015] flex flex-col items-center justify-center text-center px-4">
+                    <AlertCircle className="w-10 h-10 text-[#E06666]" />
+                    <span className="text-sm text-[#F5EAE0] mt-2">
+                      {cameraError === "denied" ? "Camera access denied" : "No camera detected on this device"}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="flex items-center justify-between w-full px-4 mb-4">
-              <button onClick={toggleFacingMode} className="p-3 bg-[#1F1015] rounded-full border border-[#3A2028] text-[#C49A6C]">
-                <FlipHorizontal className="w-5 h-5" />
-              </button>
-              
-              <button 
-                onClick={capturePhoto}
-                className="w-20 h-20 rounded-full border-4 border-[#C49A6C] p-1 flex items-center justify-center hover:scale-95 transition-transform"
-              >
-                <div className="w-full h-full bg-white rounded-full"></div>
-              </button>
-              
-              <button onClick={() => fileInputRef.current?.click()} className="p-3 bg-[#1F1015] rounded-full border border-[#3A2028] text-[#C49A6C]">
-                <Upload className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <p className="text-[#9A7A70] text-sm">Tap to capture</p>
+            {!cameraError && (
+              <>
+                <div className="flex items-center justify-between w-full px-4 mb-4">
+                  <button onClick={toggleFacingMode} className="p-3 bg-[#1F1015] rounded-full border border-[#3A2028] text-[#C49A6C]">
+                    <FlipHorizontal className="w-5 h-5" />
+                  </button>
+                  
+                  <button 
+                    onClick={capturePhoto}
+                    className="w-20 h-20 rounded-full border-4 border-[#C49A6C] p-1 flex items-center justify-center hover:scale-95 transition-transform"
+                  >
+                    <div className="w-full h-full bg-white rounded-full"></div>
+                  </button>
+                  
+                  <button onClick={() => fileInputRef.current?.click()} className="p-3 bg-[#1F1015] rounded-full border border-[#3A2028] text-[#C49A6C]">
+                    <Upload className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                <p className="text-[#9A7A70] text-sm">Tap to capture</p>
+              </>
+            )}
+            {cameraError === "denied" && (
+              <div className="w-full text-center">
+                <p className="text-[#9A7A70] text-sm mb-4">Open your browser settings and allow camera for this site</p>
+                <div className="flex gap-3 w-full">
+                  <button 
+                    onClick={startCamera}
+                    className="flex-1 bg-transparent border border-[#C49A6C] text-[#C49A6C] font-bold py-3 rounded-xl text-sm hover:bg-[#C49A6C]/10 transition-colors"
+                  >
+                    Try Again
+                  </button>
+                  <button 
+                    onClick={switchToQuiz}
+                    className="flex-1 bg-[#D4856A] text-white font-bold py-3 rounded-xl text-sm hover:opacity-90 transition-opacity"
+                  >
+                    Use Quiz Instead
+                  </button>
+                </div>
+              </div>
+            )}
+            {cameraError === "notfound" && (
+              <div className="w-full text-center">
+                <p className="text-[#9A7A70] text-sm mb-4">No camera detected on this device</p>
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full bg-transparent border border-[#C49A6C] text-[#C49A6C] font-bold py-3 rounded-xl text-sm hover:bg-[#C49A6C]/10 transition-colors"
+                >
+                  Upload a photo instead
+                </button>
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -450,7 +626,12 @@ export default function ScanPage() {
 
             <div className="flex gap-4 w-full">
               <button 
-                onClick={() => { setState("idle"); setCapturedUrl(null); }}
+                onClick={() => {
+                  setRetakeCount(prev => prev + 1);
+                  setState("idle");
+                  setCapturedUrl(null);
+                  setPhotoBase64(null);
+                }}
                 className="flex-1 bg-transparent border border-[#C49A6C] text-[#C49A6C] font-bold py-4 rounded-xl text-lg hover:bg-[#C49A6C]/10 transition-colors"
               >
                 Retake
@@ -521,8 +702,35 @@ export default function ScanPage() {
                 transition={{ duration: 0.5 }}
                 className="text-xl text-[#F5EAE0] font-bold text-center mb-8"
               >
-                {MESSAGES[msgIndex]}
+                {messages[msgIndex]}
               </motion.p>
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {showSlowMessage && (
+                <motion.p
+                  key="slow-message"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="text-sm text-[#9A7A70] text-center mb-2"
+                >
+                  Still working on your report...
+                </motion.p>
+              )}
+            </AnimatePresence>
+            <AnimatePresence>
+              {showLongMessage && (
+                <motion.p
+                  key="long-message"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="text-sm text-[#C49A6C] text-center mb-4"
+                >
+                  Taking longer than usual. You'll get your report by email.
+                </motion.p>
+              )}
             </AnimatePresence>
 
             <div className="w-full max-w-xs h-2 bg-[#1F1015] rounded-full overflow-hidden">
@@ -533,6 +741,20 @@ export default function ScanPage() {
                 className="h-full bg-gradient-to-r from-[#D4856A] to-[#C49A6C]"
               />
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            key="toast"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#1F1015] border border-[#3A2028] text-[#F5EAE0] px-4 py-3 rounded-full text-sm shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
+          >
+            {toastMessage}
           </motion.div>
         )}
       </AnimatePresence>

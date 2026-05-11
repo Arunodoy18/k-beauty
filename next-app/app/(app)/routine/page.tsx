@@ -3,14 +3,15 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { 
   ArrowRight, ShieldCheck, CheckCircle2, ChevronRight, Droplets, Sun
 } from "lucide-react";
+import { useAppContext } from "@/components/app/app-context";
 
 // Mock Data
 const MOCK_ROUTINE = {
-  skinType: "Oily · Acne-prone · Pigmentation",
+  skinType: "Oily ï¿½ Acne-prone ï¿½ Pigmentation",
   city: "Mumbai",
   routine: [
     {
@@ -127,21 +128,132 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
 };
 
+const STEP_DEFINITIONS = [
+  { key: "cleanser", stepName: "Cleanser", timing: "Morning & Night" },
+  { key: "toner", stepName: "Toner / Essence", timing: "Morning & Night" },
+  { key: "serum", stepName: "Treatment Serum", timing: "Night time" },
+  { key: "moisturizer", stepName: "Moisturizer", timing: "Morning & Night" },
+  { key: "spf", stepName: "Sun Protection", timing: "Morning routines only" },
+];
+
+const normalizeStep = (value?: string) => (value || "").toLowerCase();
+
+const pickProductForStep = (products: any[], stepKey: string, stepName: string, usedIds: Set<string>) => {
+  const stepNeedle = normalizeStep(stepKey);
+  const nameNeedle = normalizeStep(stepName);
+
+  const match = products.find((product) => {
+    if (!product || usedIds.has(product.id)) return false;
+    const tag = `${product.korean_step || ""} ${product.category || ""}`.toLowerCase();
+    return tag.includes(stepNeedle) || tag.includes(nameNeedle);
+  });
+
+  const fallback = match || products.find((product) => product && !usedIds.has(product.id));
+  if (fallback?.id) {
+    usedIds.add(fallback.id);
+  }
+  return fallback;
+};
+
+const mapProductCard = (product: any, fallback: any, whyText?: string) => {
+  return {
+    brand: product?.brand || fallback?.brand || "MY GLOW",
+    name: product?.name || fallback?.name || "Recommended product",
+    price: typeof product?.price_inr === "number" ? product.price_inr : fallback?.price || 0,
+    image: product?.image_url || fallback?.image || "",
+    ingredients: Array.isArray(product?.key_ingredients)
+      ? product.key_ingredients
+      : fallback?.ingredients || [],
+    whyForYou: whyText || fallback?.whyForYou || "Tailored for your skin profile.",
+  };
+};
+
+const buildRoutineFromApi = (payload: any) => {
+  const report = payload?.report || {};
+  const products = Array.isArray(payload?.products) ? payload.products : [];
+  const personalizedCopy = payload?.personalizedCopy || {};
+  const usedIds = new Set<string>();
+
+  const routine = STEP_DEFINITIONS.map((step, idx) => {
+    const fallbackStep = MOCK_ROUTINE.routine[idx];
+    const matched = pickProductForStep(products, step.key, step.stepName, usedIds);
+    const whyCopy = personalizedCopy?.[step.key];
+
+    return {
+      id: matched?.id || fallbackStep?.id || `step-${idx}`,
+      stepNumber: idx + 1,
+      stepName: step.stepName,
+      timing: step.timing,
+      why: whyCopy || fallbackStep?.why || "Tailored to your skin profile.",
+      product: mapProductCard(matched, fallbackStep?.product, whyCopy),
+    };
+  });
+
+  return {
+    skinType: report?.skin_type || MOCK_ROUTINE.skinType,
+    city: report?.city || MOCK_ROUTINE.city,
+    routine,
+    addons: MOCK_ROUTINE.addons,
+  };
+};
+
 export default function RoutinePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { userId } = useAppContext();
+  const reportId = searchParams.get("reportId") || searchParams.get("id");
   const [loading, setLoading] = useState(true);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [routineData, setRoutineData] = useState(MOCK_ROUTINE);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // Simulate API fetch delay
-    const timer = setTimeout(() => {
-      setLoading(false);
-      // Select all routine items by default
-      setSelectedItems(MOCK_ROUTINE.routine.map(r => r.id));
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, []);
+    let isMounted = true;
+
+    const loadRoutine = async () => {
+      if (!reportId || !userId) {
+        setLoading(false);
+        setSelectedItems(MOCK_ROUTINE.routine.map((r) => r.id));
+        return;
+      }
+
+      setLoading(true);
+      setErrorMessage(null);
+
+      try {
+        const res = await fetch(
+          `/api/get-routine?reportId=${encodeURIComponent(reportId)}&userId=${encodeURIComponent(userId)}`
+        );
+        const payload = await res.json();
+
+        if (!res.ok || !payload?.success) {
+          throw new Error(payload?.message || "Unable to load routine.");
+        }
+
+        const nextRoutine = buildRoutineFromApi(payload.data);
+
+        if (isMounted) {
+          setRoutineData(nextRoutine);
+          setSelectedItems(nextRoutine.routine.map((r: any) => r.id));
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          setErrorMessage(err?.message || "Unable to load routine.");
+          setRoutineData(MOCK_ROUTINE);
+          setSelectedItems(MOCK_ROUTINE.routine.map((r) => r.id));
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadRoutine();
+    return () => {
+      isMounted = false;
+    };
+  }, [reportId, userId]);
 
   const toggleItem = (id: string) => {
     setSelectedItems(prev => 
@@ -209,6 +321,14 @@ export default function RoutinePage() {
             {routineData.skinType}
           </div>
         </motion.div>
+
+        {errorMessage && (
+          <motion.div variants={itemVariants} className="px-6 mb-6">
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              {errorMessage}
+            </div>
+          </motion.div>
+        )}
 
         {/* ROUTINE STEPS */}
         <div className="px-5 space-y-6 mb-12">
