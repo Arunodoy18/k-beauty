@@ -2,9 +2,5 @@
 .next/
 node_modules/
 
-# Accidental root npm project files
-package.json
-package-lock.json
-
 # Local Netlify folder
 .netlify
