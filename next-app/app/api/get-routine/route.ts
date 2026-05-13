@@ -1,30 +1,36 @@
 import { textModel, parseGeminiJSON } from "@/lib/gemini";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
+
+type ReportConcern = { name?: string };
 
 export async function GET(req: NextRequest) {
   const reportId = req.nextUrl.searchParams.get("reportId");
-  const userId = req.nextUrl.searchParams.get("userId");
 
-  if (!reportId || !userId) {
+  if (!reportId) {
     return NextResponse.json(
-      { error: "missing_params", message: "reportId and userId are required" },
+      { error: "missing_params", message: "reportId is required" },
       { status: 400 }
     );
   }
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const supabase = createSupabaseServerClient();
 
   try {
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    if (authError || !auth?.user) {
+      return NextResponse.json(
+        { error: "unauthorized", message: "You must be signed in." },
+        { status: 401 }
+      );
+    }
+
     // 1. Fetch report
     const { data: report, error: reportError } = await supabase
       .from("skin_reports")
       .select("*")
       .eq("id", reportId)
-      .eq("user_id", userId)
+      .eq("user_id", auth.user.id)
       .single();
 
     if (reportError || !report) {
@@ -39,11 +45,16 @@ export async function GET(req: NextRequest) {
       ? report.concerns[0]?.name?.toLowerCase()
       : undefined;
 
-    const { data: products, error: productsError } = await supabase
+    let productsQuery = supabase
       .from("products")
       .select("*")
-      .eq("is_active", true)
-      .contains("concerns_targeted", primaryConcern ? [primaryConcern] : []);
+      .eq("is_active", true);
+
+    if (primaryConcern) {
+      productsQuery = productsQuery.contains("concerns_targeted", [primaryConcern]);
+    }
+
+    const { data: products, error: productsError } = await productsQuery;
 
     if (productsError) {
       console.error("Error fetching products:", productsError);
@@ -53,7 +64,7 @@ export async function GET(req: NextRequest) {
     const topConcerns = Array.isArray(report.concerns)
       ? report.concerns
           .slice(0, 3)
-          .map((c: any) => c.name)
+          .map((c: ReportConcern) => c.name)
           .filter(Boolean)
           .join(", ")
       : "";

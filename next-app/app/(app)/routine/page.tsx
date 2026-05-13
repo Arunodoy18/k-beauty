@@ -2,16 +2,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useRouter, useSearchParams } from "next/navigation";
-import { 
-  ArrowRight, ShieldCheck, CheckCircle2, ChevronRight, Droplets, Sun
-} from "lucide-react";
-import { useAppContext } from "@/components/app/app-context";
+import { motion } from "framer-motion";
+import { useSearchParams } from "next/navigation";
+import Image from "next/image";
+import { ShieldCheck, CheckCircle2, Sun } from "lucide-react";
 
 // Mock Data
 const MOCK_ROUTINE = {
-  skinType: "Oily � Acne-prone � Pigmentation",
+  skinType: "Oily / Acne-prone / Pigmentation",
   city: "Mumbai",
   routine: [
     {
@@ -118,6 +116,42 @@ const MOCK_ROUTINE = {
   ]
 };
 
+type ProductRecord = {
+  id?: string;
+  brand?: string;
+  name?: string;
+  price_inr?: number;
+  image_url?: string;
+  key_ingredients?: string[];
+  affiliate_url?: string;
+  korean_step?: string;
+  category?: string;
+};
+
+type RoutinePayload = {
+  report?: { skin_type?: string; city?: string };
+  products?: ProductRecord[];
+  personalizedCopy?: Record<string, string>;
+};
+
+type RoutineApiResponse = {
+  success?: boolean;
+  message?: string;
+  data?: RoutinePayload;
+};
+
+type MockProduct = (typeof MOCK_ROUTINE)["routine"][number]["product"];
+
+type RoutineProductCard = {
+  brand: string;
+  name: string;
+  price: number;
+  image: string;
+  ingredients: string[];
+  whyForYou: string;
+  affiliateUrl: string;
+};
+
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
@@ -125,7 +159,7 @@ const containerVariants = {
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
 };
 
 const STEP_DEFINITIONS = [
@@ -138,24 +172,28 @@ const STEP_DEFINITIONS = [
 
 const normalizeStep = (value?: string) => (value || "").toLowerCase();
 
-const pickProductForStep = (products: any[], stepKey: string, stepName: string, usedIds: Set<string>) => {
+const pickProductForStep = (products: ProductRecord[], stepKey: string, stepName: string, usedIds: Set<string>) => {
   const stepNeedle = normalizeStep(stepKey);
   const nameNeedle = normalizeStep(stepName);
 
   const match = products.find((product) => {
-    if (!product || usedIds.has(product.id)) return false;
+    if (!product?.id || usedIds.has(product.id)) return false;
     const tag = `${product.korean_step || ""} ${product.category || ""}`.toLowerCase();
     return tag.includes(stepNeedle) || tag.includes(nameNeedle);
   });
 
-  const fallback = match || products.find((product) => product && !usedIds.has(product.id));
+  const fallback = match || products.find((product) => product?.id && !usedIds.has(product.id));
   if (fallback?.id) {
     usedIds.add(fallback.id);
   }
   return fallback;
 };
 
-const mapProductCard = (product: any, fallback: any, whyText?: string) => {
+const mapProductCard = (
+  product: ProductRecord | null | undefined,
+  fallback: MockProduct,
+  whyText?: string
+): RoutineProductCard => {
   return {
     brand: product?.brand || fallback?.brand || "MY GLOW",
     name: product?.name || fallback?.name || "Recommended product",
@@ -165,10 +203,18 @@ const mapProductCard = (product: any, fallback: any, whyText?: string) => {
       ? product.key_ingredients
       : fallback?.ingredients || [],
     whyForYou: whyText || fallback?.whyForYou || "Tailored for your skin profile.",
+    affiliateUrl: product?.affiliate_url || "",
   };
 };
 
-const buildRoutineFromApi = (payload: any) => {
+const getAffiliateUrl = (product: { affiliateUrl?: string; brand?: string; name?: string }) => {
+  if (product?.affiliateUrl) return product.affiliateUrl;
+  const query = [product?.brand, product?.name].filter(Boolean).join(" ").trim();
+  if (!query) return "https://www.amazon.in";
+  return `https://www.amazon.in/s?k=${encodeURIComponent(query)}`;
+};
+
+const buildRoutineFromApi = (payload: RoutinePayload) => {
   const report = payload?.report || {};
   const products = Array.isArray(payload?.products) ? payload.products : [];
   const personalizedCopy = payload?.personalizedCopy || {};
@@ -198,12 +244,9 @@ const buildRoutineFromApi = (payload: any) => {
 };
 
 export default function RoutinePage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const { userId } = useAppContext();
-  const reportId = searchParams.get("reportId") || searchParams.get("id");
+  const reportId = searchParams?.get("reportId") || searchParams?.get("id");
   const [loading, setLoading] = useState(true);
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [routineData, setRoutineData] = useState(MOCK_ROUTINE);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -211,9 +254,8 @@ export default function RoutinePage() {
     let isMounted = true;
 
     const loadRoutine = async () => {
-      if (!reportId || !userId) {
+      if (!reportId) {
         setLoading(false);
-        setSelectedItems(MOCK_ROUTINE.routine.map((r) => r.id));
         return;
       }
 
@@ -222,25 +264,24 @@ export default function RoutinePage() {
 
       try {
         const res = await fetch(
-          `/api/get-routine?reportId=${encodeURIComponent(reportId)}&userId=${encodeURIComponent(userId)}`
+          `/api/get-routine?reportId=${encodeURIComponent(reportId)}`
         );
-        const payload = await res.json();
+        const payload: RoutineApiResponse = await res.json();
 
         if (!res.ok || !payload?.success) {
           throw new Error(payload?.message || "Unable to load routine.");
         }
 
-        const nextRoutine = buildRoutineFromApi(payload.data);
+        const nextRoutine = buildRoutineFromApi(payload.data ?? {});
 
         if (isMounted) {
           setRoutineData(nextRoutine);
-          setSelectedItems(nextRoutine.routine.map((r: any) => r.id));
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (isMounted) {
-          setErrorMessage(err?.message || "Unable to load routine.");
+          const message = err instanceof Error ? err.message : "Unable to load routine.";
+          setErrorMessage(message);
           setRoutineData(MOCK_ROUTINE);
-          setSelectedItems(MOCK_ROUTINE.routine.map((r) => r.id));
         }
       } finally {
         if (isMounted) {
@@ -253,32 +294,7 @@ export default function RoutinePage() {
     return () => {
       isMounted = false;
     };
-  }, [reportId, userId]);
-
-  const toggleItem = (id: string) => {
-    setSelectedItems(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
-  };
-
-  const calculateTotal = () => {
-    let total = 0;
-    // Add routine items
-    routineData.routine.forEach(r => {
-      if (selectedItems.includes(r.id)) total += r.product.price;
-    });
-    // Add addon items
-    routineData.addons.forEach(a => {
-      if (selectedItems.includes(a.id)) total += a.price;
-    });
-    return total;
-  };
-
-  const totalItems = selectedItems.length;
-  const totalPrice = calculateTotal();
-  // Mock savings logic
-  const discount = totalItems >= 4 ? 400 : 0;
-  const finalPrice = totalPrice - discount;
+  }, [reportId]);
 
   if (loading) {
     return (
@@ -308,10 +324,7 @@ export default function RoutinePage() {
       >
         {/* HEADER */}
         <motion.div variants={itemVariants} className="px-6 text-center mb-8">
-          <h1 
-            className="text-4xl text-[#D4AF37] italic mb-3 leading-tight"
-            style={{ fontFamily: "Cormorant Garamond, serif" }}
-          >
+          <h1 className="text-4xl text-[#D4AF37] italic mb-3 leading-tight font-heading">
             Your K-Beauty Routine
           </h1>
           <p className="text-gray-300 text-sm mb-4">
@@ -333,8 +346,8 @@ export default function RoutinePage() {
         {/* ROUTINE STEPS */}
         <div className="px-5 space-y-6 mb-12">
           {routineData.routine.map((step) => {
-            const isSelected = selectedItems.includes(step.id);
-            
+            const affiliateUrl = getAffiliateUrl(step.product);
+
             return (
               <motion.div 
                 variants={itemVariants} 
@@ -357,10 +370,12 @@ export default function RoutinePage() {
                 {/* Product Area */}
                 <div className="p-4 flex gap-4">
                   <div className="w-24 h-24 shrink-0 rounded-2xl bg-gray-800 overflow-hidden relative border border-gray-700">
-                    <img 
+                    <Image 
                       src={step.product.image} 
                       alt={step.product.name} 
-                      className="w-full h-full object-cover"
+                      fill
+                      sizes="96px"
+                      className="object-cover"
                     />
                   </div>
                   
@@ -384,16 +399,14 @@ export default function RoutinePage() {
 
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-800">
                       <span className="font-bold">?{step.product.price}</span>
-                      <button 
-                        onClick={() => toggleItem(step.id)}
-                        className={`text-xs font-bold px-4 py-2 rounded-full transition-all ${
-                          isSelected 
-                            ? "bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/30" 
-                            : "bg-white text-black"
-                        }`}
+                      <a
+                        href={affiliateUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-bold px-4 py-2 rounded-full bg-white text-black"
                       >
-                        {isSelected ? "Added" : "Add to Kit"}
-                      </button>
+                        Buy on Amazon/Nykaa
+                      </a>
                     </div>
                   </div>
                 </div>
@@ -410,7 +423,7 @@ export default function RoutinePage() {
           
           <div className="flex overflow-x-auto gap-4 px-6 pb-4 snap-x hide-scrollbar">
             {routineData.addons.map(addon => {
-              const isSelected = selectedItems.includes(addon.id);
+              const affiliateUrl = getAffiliateUrl(addon);
               
               return (
                 <div 
@@ -418,7 +431,7 @@ export default function RoutinePage() {
                   className="snap-start shrink-0 w-40 bg-[#111827] border border-gray-800 rounded-2xl p-3 flex flex-col relative"
                 >
                    <div className="h-32 w-full rounded-xl bg-gray-800 mb-3 overflow-hidden relative">
-                     <img src={addon.image} alt={addon.name} className="w-full h-full object-cover" />
+                     <Image src={addon.image} alt={addon.name} fill sizes="160px" className="object-cover" />
                      <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md text-[9px] px-2 py-0.5 rounded-full text-white font-medium uppercase tracking-wide">
                         {addon.type}
                      </div>
@@ -427,14 +440,14 @@ export default function RoutinePage() {
                    <h3 className="font-medium text-xs mb-2 line-clamp-2 leading-tight flex-1">{addon.name}</h3>
                    <div className="flex items-center justify-between mt-auto">
                       <span className="font-bold text-sm">?{addon.price}</span>
-                      <button 
-                        onClick={() => toggleItem(addon.id)}
-                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                          isSelected ? "bg-[#D4AF37] text-black" : "bg-gray-800 text-white"
-                        }`}
+                      <a
+                        href={affiliateUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] font-semibold px-2 py-1 rounded-full bg-white text-black"
                       >
-                        {isSelected ? <CheckCircle2 className="w-4 h-4" /> : <span className="text-lg leading-none mb-1">+</span>}
-                      </button>
+                        Buy
+                      </a>
                    </div>
                 </div>
               );
@@ -450,44 +463,13 @@ export default function RoutinePage() {
 
       </motion.div>
 
-      {/* STICKY FOOTER */}
-      <div className="fixed bottom-0 left-0 w-full bg-[#0F172A]/90 backdrop-blur-xl border-t border-gray-800 z-50 p-4 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
-        <div className="max-w-md mx-auto flex flex-col gap-3">
-          <div className="flex justify-between items-end px-2">
-            <div>
-              <p className="text-gray-400 text-sm mb-0.5">Your Kit: {totalItems} items</p>
-              <p className="text-2xl font-bold">?{finalPrice}</p>
-            </div>
-            {discount > 0 && (
-              <div className="text-right">
-                <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs font-bold block mb-1">
-                  Save ?{discount}
-                </span>
-                <span className="line-through text-gray-500 text-sm">?{totalPrice}</span>
-              </div>
-            )}
-          </div>
-          
-          <button 
-            disabled={totalItems === 0}
-            onClick={() => router.push("/checkout")}
-            className="w-full bg-gradient-to-r from-rose-500 to-rose-600 text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(244,63,94,0.3)]"
-          >
-            Proceed to Checkout <ArrowRight className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
-
-      <style dangerouslySetContent={{__html: `
+      <style dangerouslySetInnerHTML={{__html: `
         .hide-scrollbar::-webkit-scrollbar {
           display: none;
         }
         .hide-scrollbar {
           -ms-overflow-style: none;
           scrollbar-width: none;
-        }
-        .pb-safe {
-          padding-bottom: env(safe-area-inset-bottom, 1rem);
         }
       `}} />
     </div>

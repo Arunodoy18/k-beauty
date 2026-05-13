@@ -5,10 +5,10 @@ import { Bell, Camera, FileText, Home, ListChecks, UserRound } from "lucide-reac
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react"
-import type { Session, SupabaseClient, User } from "@supabase/supabase-js"
+import type { Session, User } from "@supabase/supabase-js"
 
 import { AppProvider } from "@/components/app/app-context"
-import { MissingEnvironmentError, getSupabaseBrowserClient } from "@/lib/supabase"
+import { useSupabaseClient } from "@/components/supabase-provider"
 import { cn } from "@/lib/utils"
 
 const NAV_ITEMS = [
@@ -24,28 +24,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [authError, setAuthError] = useState("")
   const [isScrolled, setIsScrolled] = useState(false)
   const [isNavVisible, setIsNavVisible] = useState(true)
   const lastScrollY = useRef(0)
+  const supabase = useSupabaseClient()
 
   useEffect(() => {
-    let supabase: SupabaseClient
-
-    try {
-      supabase = getSupabaseBrowserClient() as SupabaseClient
-    } catch (error) {
-      queueMicrotask(() => {
-        setAuthError(
-          error instanceof MissingEnvironmentError
-            ? "Supabase auth is not configured yet. Add the public Supabase env vars."
-            : "Unable to load authentication."
-        )
-        setIsLoading(false)
-      })
-      return
-    }
-
     supabase.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
       if (!data.session) {
         router.replace("/login")
@@ -69,7 +53,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     })
 
     return () => subscription.unsubscribe()
-  }, [router])
+  }, [router, supabase])
 
   useEffect(() => {
     const onScroll = () => {
@@ -103,14 +87,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     return (
       <main className="app-loading-screen">
         <p>Preparing your glow ritual...</p>
-      </main>
-    )
-  }
-
-  if (authError) {
-    return (
-      <main className="app-loading-screen">
-        <p className="dashboard-alert error">{authError}</p>
       </main>
     )
   }

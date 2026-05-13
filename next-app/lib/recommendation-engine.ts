@@ -160,7 +160,7 @@ export function getRoutine(report: SkinReport, city: string, productCatalog: Pro
     spf: null
   };
   
-  const orderSteps = ['cleanser', 'toner', 'serum', 'moisturizer', 'spf'];
+  const orderSteps: Array<keyof RoutineKit> = ['cleanser', 'toner', 'serum', 'moisturizer', 'spf'];
   
   for (const step of orderSteps) {
     const stepProducts = productCatalog.filter(p => p.korean_step.toLowerCase() === step);
@@ -175,7 +175,7 @@ export function getRoutine(report: SkinReport, city: string, productCatalog: Pro
       scoredProducts.sort((a, b) => b.score - a.score);
       
       // Assign the best scoring product to the routine slot
-      (routine as any)[step] = scoredProducts[0].product;
+      routine[step] = scoredProducts[0].product;
     }
   }
 

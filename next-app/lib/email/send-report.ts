@@ -4,17 +4,33 @@ import { Resend } from 'resend';
 const resend = new Resend(process.env.RESEND_API_KEY || 're_placeholder');
 const FROM_EMAIL = process.env.FROM_EMAIL || 'hello@myglow.in';
 
+type ReportEmailConcern = {
+  name?: string;
+  severity?: 'high' | 'moderate' | 'mild' | string;
+};
+
+type ReportEmailInsight = {
+  explanation?: string;
+};
+
+type ReportEmailPayload = {
+  overallGlowScore?: number;
+  concerns?: ReportEmailConcern[];
+  insights?: ReportEmailInsight[];
+  climateNote?: string;
+};
+
 export async function sendSkinReportEmail(
   email: string, 
   name: string, 
-  reportData: any, 
+  reportData: ReportEmailPayload, 
   reportId: string, 
   appUrl: string
 ) {
   const reportLink = `${appUrl}/app/report?id=${reportId}`;
   
   // Format the top 3 concerns into HTML
-  const concernsHtml = (reportData.concerns || []).slice(0, 3).map((c: any) => {
+  const concernsHtml = (reportData.concerns || []).slice(0, 3).map((c) => {
     // Determine color based on severity
     const dotColor = c.severity === 'high' ? '#ef4444' : c.severity === 'moderate' ? '#f59e0b' : '#10b981';
     
@@ -63,7 +79,7 @@ export async function sendSkinReportEmail(
         <div style="background-color: #111827; border: 1px solid #1F2937; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
           <h3 style="color: #D4AF37; margin-top: 0; margin-bottom: 12px; font-size: 18px;">Expert Insight ✨</h3>
           <p style="color: #E5E7EB; line-height: 1.6; margin: 0; font-size: 15px;">
-            ${reportData.insights && reportData.insights.length > 0 ? reportData.insights[0].explanation : 'Your skin has unique characteristics that we can balance with the right targeted K-beauty routine.'}
+            ${reportData.insights && reportData.insights.length > 0 ? reportData.insights[0]?.explanation : 'Your skin has unique characteristics that we can balance with the right targeted K-beauty routine.'}
           </p>
         </div>
         

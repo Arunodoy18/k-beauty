@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
 import { sendWaitlistWelcomeEmail } from "@/lib/email/send-report";
-import { createClient } from "@supabase/supabase-js";
 
 export async function POST(req: Request) {
   try {
-    const supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-
     const body = await req.json();
     const { email, name } = body;
 
@@ -19,7 +13,6 @@ export async function POST(req: Request) {
       );
     }
 
-    void supabase;
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://myglow.in';
 
@@ -43,12 +36,13 @@ export async function POST(req: Request) {
       data: { messageId: data?.id },
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("API Error in send-welcome-email:", error);
+    const message = error instanceof Error ? error.message : "An unexpected error occurred while sending the welcome email.";
     return NextResponse.json(
       {
         error: "server_error",
-        message: "An unexpected error occurred while sending the welcome email.",
+        message,
       },
       { status: 500 }
     );

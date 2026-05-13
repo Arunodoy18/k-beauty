@@ -4,10 +4,10 @@ import { motion } from "framer-motion"
 import { LogOut, Sparkles } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
-import type { AuthChangeEvent, Session, SupabaseClient, User } from "@supabase/supabase-js"
+import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js"
 
 import { Button } from "@/components/ui/button"
-import { MissingEnvironmentError, getSupabaseBrowserClient } from "@/lib/supabase"
+import { useSupabaseClient } from "@/components/supabase-provider"
 
 const PHASES = [
   {
@@ -44,27 +44,12 @@ const PHASES = [
 
 export default function DashboardPage() {
   const router = useRouter()
+  const supabase = useSupabaseClient()
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [authError, setAuthError] = useState("")
 
   useEffect(() => {
-    let supabase: SupabaseClient
-
-    try {
-      supabase = getSupabaseBrowserClient() as SupabaseClient
-    } catch (error) {
-      queueMicrotask(() => {
-        setAuthError(
-          error instanceof MissingEnvironmentError
-            ? "Supabase auth is not configured yet. Add the public Supabase env vars."
-            : "Unable to load authentication."
-        )
-        setIsLoading(false)
-      })
-      return
-    }
-
     supabase.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
       if (!data.session) {
         router.replace("/login")
@@ -88,11 +73,10 @@ export default function DashboardPage() {
     })
 
     return () => subscription.unsubscribe()
-  }, [router])
+  }, [router, supabase])
 
   const onSignOut = async () => {
     try {
-      const supabase = getSupabaseBrowserClient() as SupabaseClient
       await supabase.auth.signOut()
       router.replace("/login")
       router.refresh()

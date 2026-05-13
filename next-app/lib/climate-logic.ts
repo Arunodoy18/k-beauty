@@ -59,7 +59,7 @@ export function adjustRoutineForClimate(routine: Product[], climate: ClimateProf
   // This function simulates the adjustments requested. 
   // In a live system, this might instead query the DB for alternative products.
   return routine.map(product => {
-    let adjustedProduct = { ...product };
+    const adjustedProduct = { ...product };
 
     // High humidity -> swap cream to gel
     if ((climate.humidity === 'high' || climate.humidity === 'very_high') && product.texture === 'cream') {

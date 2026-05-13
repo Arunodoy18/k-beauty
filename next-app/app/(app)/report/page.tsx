@@ -9,6 +9,7 @@ import {
   Share2, Download, RefreshCw, ArrowRight, Sparkles, ChevronDown, CheckCircle2
 } from "lucide-react";
 import { useAppContext } from "@/components/app/app-context";
+import { useSupabaseClient } from "@/components/supabase-provider";
 
 // Mock Data (In real app, fetch via reportId or global store)
 const MOCK_REPORT = {
@@ -36,11 +37,34 @@ const MOCK_REPORT = {
   }
 };
 
+type ReportConcern = {
+  name?: string;
+  score?: number;
+  severity?: string;
+  explanation?: string;
+  recommendedIngredient?: string;
+};
+
+type ReportInsight = {
+  finding?: string;
+  explanation?: string;
+  recommendedIngredient?: string;
+};
+
+type ReportRecord = {
+  overall_glow_score?: number;
+  city?: string;
+  created_at?: string;
+  concerns?: ReportConcern[];
+  insights?: ReportInsight[];
+  climate_note?: string;
+};
+
 const circleVariants = {
   hidden: { strokeDashoffset: 2 * Math.PI * 45 },
   visible: (score: number) => ({
     strokeDashoffset: 2 * Math.PI * 45 - (score / 100) * (2 * Math.PI * 45),
-    transition: { duration: 1.5, ease: "easeOut", delay: 0.5 }
+    transition: { duration: 1.5, delay: 0.5 }
   })
 };
 
@@ -51,7 +75,7 @@ const containerVariants = {
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
 };
 
 const getConcernIcon = (name?: string) => {
@@ -70,7 +94,7 @@ const formatReportDate = (value?: string) => {
   return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 };
 
-const mapReportToUi = (data: any, fallbackCity: string) => {
+const mapReportToUi = (data: ReportRecord | null, fallbackCity: string) => {
   const concerns = Array.isArray(data?.concerns) ? data.concerns : [];
   const insights = Array.isArray(data?.insights) ? data.insights : [];
   const defaultIngredient = concerns[0]?.recommendedIngredient || "Niacinamide";
@@ -80,7 +104,7 @@ const mapReportToUi = (data: any, fallbackCity: string) => {
     city: data?.city || fallbackCity,
     date: formatReportDate(data?.created_at),
     concerns: concerns.length
-      ? concerns.map((concern: any, idx: number) => ({
+      ? concerns.map((concern, idx) => ({
           id: `concern-${idx}`,
           name: concern?.name || "Concern",
           icon: getConcernIcon(concern?.name),
@@ -90,7 +114,7 @@ const mapReportToUi = (data: any, fallbackCity: string) => {
         }))
       : MOCK_REPORT.concerns,
     insights: insights.length
-      ? insights.map((insight: any, idx: number) => ({
+        ? insights.map((insight, idx) => ({
           id: `insight-${idx}`,
           title: insight?.finding || "Insight",
           text: insight?.explanation || "No additional details available yet.",
@@ -108,8 +132,9 @@ export default function ReportPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { userId } = useAppContext();
-  const reportId = searchParams.get("id") || searchParams.get("reportId");
-  const fallbackCity = searchParams.get("city") || MOCK_REPORT.city;
+  const supabase = useSupabaseClient();
+  const reportId = searchParams?.get("id") || searchParams?.get("reportId");
+  const fallbackCity = searchParams?.get("city") || MOCK_REPORT.city;
   const [report, setReport] = useState(MOCK_REPORT);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -118,9 +143,9 @@ export default function ReportPage() {
 
   // Score Color Logic
   const getScoreColor = (value: number) => {
-    if (value > 75) return "#10B981"; // green
-    if (value >= 50) return "#F59E0B"; // amber
-    return "#F43F5E"; // rose
+    if (value > 75) return "var(--green)";
+    if (value >= 50) return "var(--amber)";
+    return "var(--red)";
   };
 
   const circumference = 2 * Math.PI * 45;
@@ -134,10 +159,11 @@ export default function ReportPage() {
           url: window.location.href,
         });
       } else {
-        alert("Sharing not supported on this browser.");
+        await navigator.clipboard.writeText(window.location.href);
+        alert("Link copied to clipboard.");
       }
-    } catch (err) {
-      console.log(err);
+    } catch {
+      setErrorMessage("Unable to share the report right now.");
     }
   };
 
@@ -153,6 +179,8 @@ export default function ReportPage() {
         setIsLoading(false);
         if (!reportId) {
           setErrorMessage("Missing report id.");
+        } else if (!userId) {
+          setErrorMessage("Sign in to view your report.");
         }
         return;
       }
@@ -161,22 +189,25 @@ export default function ReportPage() {
       setErrorMessage(null);
 
       try {
-        const res = await fetch(
-          `/api/get-routine?reportId=${encodeURIComponent(reportId)}&userId=${encodeURIComponent(userId)}`
-        );
-        const payload = await res.json();
+        const { data, error } = await supabase
+          .from("skin_reports")
+          .select("*")
+          .eq("id", reportId)
+          .eq("user_id", userId)
+          .single();
 
-        if (!res.ok || !payload?.success) {
-          throw new Error(payload?.message || "Unable to load report.");
+        if (error || !data) {
+          throw new Error("Report not found.");
         }
 
-        const nextReport = mapReportToUi(payload.data?.report, fallbackCity);
+        const nextReport = mapReportToUi(data, fallbackCity);
         if (isMounted) {
           setReport(nextReport);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (isMounted) {
-          setErrorMessage(err?.message || "Unable to load report.");
+          const message = err instanceof Error ? err.message : "Unable to load report.";
+          setErrorMessage(message);
         }
       } finally {
         if (isMounted) {
@@ -189,7 +220,7 @@ export default function ReportPage() {
     return () => {
       isMounted = false;
     };
-  }, [reportId, userId, fallbackCity]);
+  }, [reportId, userId, fallbackCity, supabase]);
 
   return (
     <div className="min-h-screen bg-[#0F172A] text-white font-sans pb-24 overflow-x-hidden" ref={reportRef}>
@@ -204,10 +235,7 @@ export default function ReportPage() {
           <p className="text-gray-400 text-sm font-medium tracking-wide uppercase mb-2">
             {report.city} &middot; {report.date}
           </p>
-          <h1 
-            className="text-4xl text-center text-[#D4AF37] italic mb-10"
-            style={{ fontFamily: "Cormorant Garamond, serif" }}
-          >
+          <h1 className="text-4xl text-center text-[#D4AF37] italic mb-10 font-heading">
             Your Glow Report
           </h1>
 
@@ -216,7 +244,7 @@ export default function ReportPage() {
             <svg width="192" height="192" viewBox="0 0 100 100" className="transform -rotate-90">
               <circle 
                 cx="50" cy="50" r="45" 
-                stroke="#1F2937" strokeWidth="6" fill="none" 
+                stroke="var(--border)" strokeWidth="6" fill="none" 
               />
               <motion.circle 
                 cx="50" cy="50" r="45" 
@@ -321,7 +349,7 @@ export default function ReportPage() {
             <h2 className="text-xl font-bold text-white">What your skin is telling us</h2>
           </div>
           <div className="space-y-4">
-            {report.insights.map((insight, idx) => (
+            {report.insights.map((insight) => (
               <div key={insight.id} className="bg-[#111827] border border-gray-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-1 h-full bg-[#D4AF37]/50" />
                 <h3 className="font-semibold text-[17px] mb-2 text-white">{insight.title}</h3>
@@ -409,7 +437,7 @@ export default function ReportPage() {
       </motion.div>
 
       {/* Internal CSS for horizontal scrollbar hide */}
-      <style dangerouslySetContent={{__html: `
+        <style dangerouslySetInnerHTML={{__html: `
         .hide-scrollbar::-webkit-scrollbar {
           display: none;
         }

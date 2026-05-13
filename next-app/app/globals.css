@@ -110,6 +110,10 @@
   background: var(--bg);
 }
 
+.font-heading {
+  font-family: var(--font-heading);
+}
+
 .lumina-root {
   --color-bg: var(--bg);
   --color-text: var(--text);

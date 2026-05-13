@@ -4,8 +4,9 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { 
-  ArrowRight, X, Minus, Plus, Tag, ShieldCheck, ChevronLeft
+  ArrowRight, X, Minus, Plus, Tag, ShieldCheck, ChevronLeft, Package
 } from "lucide-react";
 
 // Mock Cart State
@@ -80,7 +81,7 @@ export default function CartPage() {
            <Package className="w-10 h-10 text-gray-500" />
         </div>
         <h2 className="text-2xl font-bold mb-2">Your cart is empty</h2>
-        <p className="text-gray-400 mb-8 text-center">It seems like you haven't added any products yet.</p>
+        <p className="text-gray-400 mb-8 text-center">It seems like you haven&apos;t added any products yet.</p>
         <button 
           onClick={() => router.push("/routine")}
           className="bg-[#D4AF37] text-black font-bold py-4 px-8 rounded-xl"
@@ -115,8 +116,8 @@ export default function CartPage() {
                 transition={{ duration: 0.3 }}
                 className="flex gap-4 p-3 bg-[#111827] border border-gray-800 rounded-2xl relative overflow-hidden"
               >
-                <div className="w-20 h-20 bg-gray-800 rounded-xl overflow-hidden shrink-0">
-                  <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                <div className="w-20 h-20 bg-gray-800 rounded-xl overflow-hidden shrink-0 relative">
+                  <Image src={item.image} alt={item.name} fill sizes="80px" className="object-cover" />
                 </div>
                 <div className="flex-1 flex flex-col justify-between py-1">
                   <div className="flex justify-between items-start">
@@ -220,7 +221,7 @@ export default function CartPage() {
         </div>
       </div>
 
-      <style dangerouslySetContent={{__html: `
+      <style dangerouslySetInnerHTML={{__html: `
         .pb-safe { padding-bottom: env(safe-area-inset-bottom, 1rem); }
       `}} />
     </div>

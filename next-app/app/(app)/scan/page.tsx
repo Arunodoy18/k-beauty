@@ -6,13 +6,42 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Camera, Upload, Sun, Sparkles, User, RefreshCw, AlertCircle, FlipHorizontal } from "lucide-react";
 import { useAppContext } from "@/components/app/app-context";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { useSupabaseClient } from "@/components/supabase-provider";
 
 type ScanState = "idle" | "live" | "preview" | "analyzing" | "error";
 
+type QuizAnswers = {
+  skinFeel: string;
+  breakoutFrequency: string;
+  poreVisibility: string;
+  sensitivity: string;
+  pigmentationScore: number;
+  dullnessScore: number;
+};
+
+type QuizQuestion = {
+  id: keyof QuizAnswers;
+  title: string;
+  type: "select" | "slider";
+  options?: string[];
+  label?: string;
+};
+
+type AnalyzePayload = {
+  userId: string;
+  city: string;
+  photoBase64?: string | null;
+  quizAnswers?: QuizAnswers;
+};
+
+type AnalyzeResponse = {
+  reportId?: string;
+  message?: string;
+};
+
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
-const QUIZ_QUESTIONS = [
+const QUIZ_QUESTIONS: QuizQuestion[] = [
   {
     id: "skinFeel",
     title: "How does your skin feel 2 hours after washing?",
@@ -54,12 +83,13 @@ const QUIZ_QUESTIONS = [
 export default function ScanPage() {
   const router = useRouter();
   const { userId } = useAppContext();
+  const supabase = useSupabaseClient();
   const [profileCity, setProfileCity] = useState("Mumbai");
   
   const [state, setState] = useState<ScanState>("idle");
   const [activeTab, setActiveTab] = useState<"camera" | "quiz">("camera");
   const [currentQ, setCurrentQ] = useState(0);
-  const [quizAnswers, setQuizAnswers] = useState<Record<string, any>>({
+  const [quizAnswers, setQuizAnswers] = useState<QuizAnswers>({
     skinFeel: "",
     breakoutFrequency: "",
     poreVisibility: "",
@@ -93,7 +123,6 @@ export default function ScanPage() {
 
     const loadProfile = async () => {
       try {
-        const supabase = getSupabaseBrowserClient();
         const { data, error } = await supabase
           .from("user_profiles")
           .select("city")
@@ -104,8 +133,8 @@ export default function ScanPage() {
         if (isActive && data?.city) {
           setProfileCity(data.city);
         }
-      } catch (err) {
-        console.error("Failed to load user profile.", err);
+      } catch {
+        setProfileCity("Mumbai");
       }
     };
 
@@ -114,7 +143,7 @@ export default function ScanPage() {
     return () => {
       isActive = false;
     };
-  }, [userId]);
+  }, [supabase, userId]);
 
   const messages = [
     "Reading skin texture...",
@@ -164,14 +193,15 @@ export default function ScanPage() {
         videoRef.current.srcObject = stream;
       }
       setState("live");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      if (err?.name === "NotAllowedError") {
+      const errorName = err instanceof DOMException ? err.name : err instanceof Error ? err.name : "";
+      if (errorName === "NotAllowedError") {
         setCameraError("denied");
         setState("live");
         return;
       }
-      if (err?.name === "NotFoundError") {
+      if (errorName === "NotFoundError") {
         setCameraError("notfound");
         setState("live");
         return;
@@ -277,7 +307,7 @@ export default function ScanPage() {
     }, 30000);
     
     try {
-      const payload: any = {
+      const payload: AnalyzePayload = {
         userId,
         city: profileCity
       };
@@ -294,18 +324,21 @@ export default function ScanPage() {
         body: JSON.stringify(payload)
       });
       
-      const data = await res.json();
-      
-      if (data.reportId) {
-        if (!analysisTimedOutRef.current) {
-          router.push("/report?id=" + data.reportId);
-        }
-      } else {
+      const data: AnalyzeResponse = await res.json();
+
+      if (!res.ok) {
         throw new Error(data.message || "Failed to analyze skin");
       }
-    } catch (err: any) {
-      console.error(err);
-      setErrorMsg("Analysis failed. " + err.message);
+
+      if (data.reportId && !analysisTimedOutRef.current) {
+        router.push("/report?id=" + data.reportId);
+        return;
+      }
+
+      throw new Error("Missing report id from analysis.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Analysis failed.";
+      setErrorMsg("Analysis failed. " + message);
       setState("error");
     } finally {
       if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
@@ -345,7 +378,7 @@ export default function ScanPage() {
             exit={{ opacity: 0, y: -20 }}
             className="flex flex-col items-center w-full max-w-sm text-center"
           >
-            <h1 className="text-3xl mb-6" style={{ fontFamily: "Cormorant Garamond, serif" }}>AI Skin Scan</h1>
+            <h1 className="text-3xl mb-6 font-heading">AI Skin Scan</h1>
             
             {/* TABS */}
             <div className="flex bg-[#1F1015] rounded-full p-1 mb-8 w-full border border-[#3A2028]">
@@ -405,7 +438,7 @@ export default function ScanPage() {
             </div>
             
             <p className="mt-6 text-[10px] text-[#9A7A70] flex items-center justify-center gap-1">
-              <span>??</span> Your photo is never stored
+              <span>Note:</span> Your photo is never stored
             </p>
             {retakeCount > 3 && (
               <button
@@ -439,7 +472,7 @@ export default function ScanPage() {
                     exit={{ opacity: 0, x: -20 }}
                     className="w-full text-left"
                   >
-                    <h2 className="text-2xl mb-8" style={{ fontFamily: 'Cormorant Garamond, serif' }}>
+                    <h2 className="text-2xl mb-8 font-heading">
                       {QUIZ_QUESTIONS[currentQ].title}
                     </h2>
                     
@@ -459,7 +492,7 @@ export default function ScanPage() {
 
                     {QUIZ_QUESTIONS[currentQ].type === "slider" && (
                       <div className="flex flex-col items-center gap-6 mt-4">
-                        <div className="text-6xl text-[#D4AF37]" style={{ fontFamily: 'Cormorant Garamond, serif' }}>
+                        <div className="text-6xl text-[#D4AF37] font-heading">
                           {quizAnswers[QUIZ_QUESTIONS[currentQ].id]}
                         </div>
                         <input 
@@ -498,7 +531,7 @@ export default function ScanPage() {
                       disabled={QUIZ_QUESTIONS[currentQ].type === "select" && !quizAnswers[QUIZ_QUESTIONS[currentQ].id]}
                       className="flex-[2] bg-[#D4856A] text-white font-bold py-4 rounded-xl text-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity whitespace-nowrap"
                     >
-                      Analyze My Skin ✨
+                      Analyze My Skin
                     </button>
                   )}
                 </div>
@@ -523,13 +556,14 @@ export default function ScanPage() {
                     autoPlay 
                     playsInline 
                     muted 
-                    className="absolute inset-0 w-full h-full object-cover"
-                    style={{ transform: facingMode === "user" ? "scaleX(-1)" : "none" }}
+                    className={`absolute inset-0 w-full h-full object-cover ${
+                      facingMode === "user" ? "-scale-x-100" : ""
+                    }`}
                   />
 
                   {/* Face Target Ellipse */}
                   <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox="0 0 280 380">
-                    <ellipse cx="140" cy="190" rx="90" ry="120" fill="none" stroke="#C49A6C" strokeWidth="2" strokeDasharray="8 8" opacity="0.6"/>
+                    <ellipse cx="140" cy="190" rx="90" ry="120" fill="none" stroke="var(--gold)" strokeWidth="2" strokeDasharray="8 8" opacity="0.6"/>
                   </svg>
 
                   {/* Scanning laser animation overlay */}
@@ -616,9 +650,10 @@ export default function ScanPage() {
             exit={{ opacity: 0, scale: 1.05 }}
             className="flex flex-col items-center w-full max-w-sm"
           >
-            <h2 className="text-2xl mb-6" style={{ fontFamily: "Cormorant Garamond, serif" }}>Review Scan</h2>
+            <h2 className="text-2xl mb-6 font-heading">Review Scan</h2>
             
             <div className="relative w-[280px] h-[380px] rounded-[100px] overflow-hidden mb-8 border border-[#3A2028] bg-[#1F1015]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={capturedUrl} alt="Captured scan" className="absolute inset-0 w-full h-full object-cover" />
             </div>
 
@@ -640,7 +675,7 @@ export default function ScanPage() {
                 onClick={handleAnalyze}
                 className="flex-[2] bg-[#D4856A] text-white font-bold py-4 rounded-xl text-lg hover:opacity-90 transition-opacity"
               >
-                Analyze ?
+                Analyze
               </button>
             </div>
           </motion.div>
@@ -684,6 +719,7 @@ export default function ScanPage() {
                 transition={{ duration: 1, ease: "easeInOut" }}
                 className="relative overflow-hidden mb-12 border-2 border-[#C49A6C] shadow-[0_0_50px_rgba(196,154,108,0.3)]"
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={capturedUrl} alt="Analyzing scan" className="w-full h-full object-cover" />
                 <motion.div 
                   animate={{ top: ["0%", "100%", "0%"] }}
@@ -728,7 +764,7 @@ export default function ScanPage() {
                   exit={{ opacity: 0, y: -8 }}
                   className="text-sm text-[#C49A6C] text-center mb-4"
                 >
-                  Taking longer than usual. You'll get your report by email.
+                  Taking longer than usual. You&apos;ll get your report by email.
                 </motion.p>
               )}
             </AnimatePresence>

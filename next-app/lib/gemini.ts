@@ -16,7 +16,7 @@ export const textModel = genAI.getGenerativeModel({
   generationConfig: { temperature: 0.6, maxOutputTokens: 800 },
 })
 
-export function parseGeminiJSON(raw: string): any {
+export function parseGeminiJSON<T = unknown>(raw: string): T {
   const cleaned = raw
     .trim()
     .replace(/^```json\n?/, '')
@@ -24,8 +24,8 @@ export function parseGeminiJSON(raw: string): any {
     .replace(/\n?```$/, '')
     .trim()
   try {
-    return JSON.parse(cleaned)
+    return JSON.parse(cleaned) as T
   } catch {
-    throw new SyntaxError('Gemini returned invalid JSON: ' + raw.slice(0, 100))
+    throw new SyntaxError('Gemini returned invalid JSON')
   }
 }

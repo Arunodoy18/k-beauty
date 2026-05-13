@@ -8,7 +8,7 @@ import { FormEvent, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { MissingEnvironmentError, getSupabaseBrowserClient } from "@/lib/supabase"
+import { useSupabaseClient } from "@/components/supabase-provider"
 
 type AuthMode = "login" | "signup"
 
@@ -18,6 +18,7 @@ type AuthFormProps = {
 
 export function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter()
+  const supabase = useSupabaseClient()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -33,7 +34,6 @@ export function AuthForm({ mode }: AuthFormProps) {
     setIsLoading(true)
 
     try {
-      const supabase = getSupabaseBrowserClient()
       const normalizedEmail = email.trim().toLowerCase()
 
       if (isSignup) {
@@ -73,12 +73,7 @@ export function AuthForm({ mode }: AuthFormProps) {
 
       router.replace("/home")
       router.refresh()
-    } catch (authError) {
-      if (authError instanceof MissingEnvironmentError) {
-        setError("Supabase auth is not configured yet. Add the public Supabase env vars.")
-        return
-      }
-
+    } catch {
       setError("Something went wrong. Please try again.")
     } finally {
       setIsLoading(false)

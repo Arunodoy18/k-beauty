@@ -3,9 +3,18 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { parseGeminiJSON, skinModel } from "@/lib/gemini";
 
+type GeminiReport = {
+  overallGlowScore: number;
+  skinType: string;
+  concerns: unknown[];
+  insights: unknown[];
+  climateNote: string;
+  routineComplexity: string;
+};
+
 export async function POST(req: NextRequest) {
   const supabase = createClient(
-    process.env.SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
@@ -119,8 +128,9 @@ Return this exact JSON schema:
 ${jsonSchema}`,
         ]);
       }
-    } catch (err: any) {
-      if (err.message?.includes("SAFETY")) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "";
+      if (message.includes("SAFETY")) {
         return NextResponse.json(
           {
             error: "unclear_image",
@@ -139,10 +149,10 @@ ${jsonSchema}`,
 
     // -- PARSE GEMINI RESPONSE --
     const raw = result?.response.text() ?? "";
-    let report;
+    let report: GeminiReport;
     try {
-      report = parseGeminiJSON(raw);
-    } catch (err) {
+      report = parseGeminiJSON<GeminiReport>(raw);
+    } catch {
       return NextResponse.json(
         { error: "parse_failed", message: "Could not read the skin analysis. Please retake." },
         { status: 500 }
@@ -166,18 +176,11 @@ ${jsonSchema}`,
 
     if (dbError) {
       console.error("Supabase insert error:", dbError);
-      // Still return the report even if DB save fails
-      return NextResponse.json({
-        success: true,
-        data: { reportId: "temp-" + Date.now(), ...report },
-      });
+      return NextResponse.json({ reportId: "temp-" + Date.now(), ...report });
     }
 
-    return NextResponse.json({
-      success: true,
-      data: { reportId: saved.id, ...report },
-    });
-  } catch (err: any) {
+    return NextResponse.json({ reportId: saved.id, ...report });
+  } catch (err: unknown) {
     console.error("Analyze skin error:", err);
     return NextResponse.json(
       { error: "server_error", message: "Something went wrong. Please try again." },

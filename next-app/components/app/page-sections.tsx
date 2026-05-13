@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion"
 import { Camera, Droplets, FileText, ShieldCheck, Sparkles } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import Link from "next/link"
 
 import { useAppContext } from "@/components/app/app-context"
@@ -145,7 +146,7 @@ function InfoCard({
   text,
   title,
 }: {
-  icon: React.ComponentType<{ size?: number }>
+  icon: LucideIcon
   text: string
   title: string
 }) {

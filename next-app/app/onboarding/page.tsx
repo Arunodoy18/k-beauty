@@ -13,10 +13,11 @@ import {
   Star, 
   ShieldAlert 
 } from "lucide-react";
-import { getSupabaseBrowserClient } from "../../lib/supabase";
+import { useSupabaseClient } from "@/components/supabase-provider";
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const supabase = useSupabaseClient();
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -41,8 +42,32 @@ export default function OnboardingPage() {
         // Fallback for generalized Indian Standard Time
         setFormData(prev => ({...prev, city: "Mumbai"}));
       }
-    } catch(e) {}
+    } catch {}
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkProfile = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (!data.user) return;
+
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("id")
+        .eq("id", data.user.id)
+        .maybeSingle();
+
+      if (isMounted && profile?.id) {
+        router.replace("/home");
+      }
+    };
+
+    checkProfile();
+    return () => {
+      isMounted = false;
+    };
+  }, [router, supabase]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -89,8 +114,6 @@ export default function OnboardingPage() {
   const submitOnboarding = async () => {
     setIsSubmitting(true);
     try {
-      const supabase = getSupabaseBrowserClient();
-      
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -170,7 +193,7 @@ export default function OnboardingPage() {
           <motion.div 
             className="h-full bg-[#D4AF37]"
             initial={{ width: 0 }}
-            animate={{ width: \`\${(step / 5) * 100}%\` }}
+            animate={{ width: `${(step / 5) * 100}%` }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
           />
         </div>
@@ -194,7 +217,7 @@ export default function OnboardingPage() {
             {step === 1 && (
               <div className="flex flex-col gap-6">
                 <div>
-                  <h1 className="text-3xl font-bold tracking-tight mb-2">Let's get to know you</h1>
+                  <h1 className="text-3xl font-bold tracking-tight mb-2">Let&apos;s get to know you</h1>
                   <p className="text-gray-400 text-sm">Tell us a bit about yourself to start.</p>
                 </div>
                 
@@ -233,7 +256,7 @@ export default function OnboardingPage() {
             {step === 2 && (
               <div className="flex flex-col gap-6">
                 <div>
-                  <h1 className="text-3xl font-bold tracking-tight mb-2">What's your skin type?</h1>
+                  <h1 className="text-3xl font-bold tracking-tight mb-2">What&apos;s your skin type?</h1>
                   <p className="text-gray-400 text-sm">Select the one that best describes your skin.</p>
                 </div>
                 <div className="flex flex-col gap-3">
@@ -244,17 +267,17 @@ export default function OnboardingPage() {
                       <button
                         key={type.id}
                         onClick={() => setFormData(prev => ({...prev, skin_type: type.id}))}
-                        className={\`flex items-center gap-4 p-4 rounded-xl border text-left transition-all duration-300 \${
+                        className={`flex items-center gap-4 p-4 rounded-xl border text-left transition-all duration-300 ${
                           isSelected 
                             ? "bg-[#D4AF37]/10 border-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.15)]" 
                             : "bg-[#111827] border-gray-800 hover:border-gray-700"
-                        }\`}
+                        }`}
                       >
-                        <div className={\`p-3 rounded-lg flex-shrink-0 \${isSelected ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'bg-gray-800/50 text-gray-300'}\`}>
+                        <div className={`p-3 rounded-lg flex-shrink-0 ${isSelected ? "bg-[#D4AF37]/20 text-[#D4AF37]" : "bg-gray-800/50 text-gray-300"}`}>
                           <Icon className="w-6 h-6" />
                         </div>
                         <div>
-                          <p className={\`font-semibold text-lg \${isSelected ? 'text-white' : 'text-gray-200'}\`}>
+                          <p className={`font-semibold text-lg ${isSelected ? "text-white" : "text-gray-200"}`}>
                             {type.id}
                           </p>
                           <p className="text-sm text-gray-400">{type.desc}</p>
@@ -280,11 +303,11 @@ export default function OnboardingPage() {
                         key={c}
                         onClick={() => toggleConcern(c)}
                         disabled={!isSelected && formData.concerns.length >= 3}
-                        className={\`px-5 py-3 rounded-full text-sm font-medium transition-all duration-300 \${
+                        className={`px-5 py-3 rounded-full text-sm font-medium transition-all duration-300 ${
                           isSelected 
                             ? "bg-[#D4AF37] text-[#0F172A] shadow-md shadow-[#D4AF37]/20" 
                             : "bg-[#111827] border border-gray-800 text-gray-300 hover:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                        }\`}
+                        }`}
                       >
                         {c}
                       </button>
@@ -308,17 +331,17 @@ export default function OnboardingPage() {
                       <button
                         key={lvl}
                         onClick={() => setFormData(prev => ({...prev, routine_level: lvl}))}
-                        className={\`relative p-5 text-left rounded-xl border overflow-hidden transition-all duration-300 \${
+                        className={`relative p-5 text-left rounded-xl border overflow-hidden transition-all duration-300 ${
                           isSelected 
                             ? "border-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.15)]" 
                             : "bg-[#111827] border-gray-800 hover:border-gray-700"
-                        }\`}
+                        }`}
                       >
                         <div 
-                          className={\`absolute left-0 top-0 bottom-0 transition-all duration-500 \${isSelected ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'bg-gray-800/30'}\`} 
-                          style={{ width: \`\${fillPercentage}%\` }}
+                          className={`absolute left-0 top-0 bottom-0 transition-all duration-500 ${isSelected ? "bg-[#D4AF37]/20 text-[#D4AF37]" : "bg-gray-800/30"}`} 
+                          style={{ width: `${fillPercentage}%` }}
                         />
-                        <p className={\`relative z-10 font-medium text-lg \${isSelected ? 'text-[#D4AF37]' : 'text-gray-300'}\`}>
+                        <p className={`relative z-10 font-medium text-lg ${isSelected ? "text-[#D4AF37]" : "text-gray-300"}`}>
                           {lvl}
                         </p>
                       </button>
@@ -408,9 +431,9 @@ export default function OnboardingPage() {
         <button
           onClick={handleNext}
           disabled={isSubmitting}
-          className={\`w-full py-4 rounded-2xl font-semibold text-lg flex items-center justify-center gap-2 transition-all \${
+          className={`w-full py-4 rounded-2xl font-semibold text-lg flex items-center justify-center gap-2 transition-all ${
             isSubmitting ? "bg-[#D4856A]/50 text-white/50 cursor-wait" : "bg-[#D4856A] text-white shadow-lg shadow-[#D4856A]/20 hover:bg-[#D4856A]/90 hover:scale-[0.99] active:scale-95"
-          }\`}
+          }`}
         >
           {step === 5 ? (
             isSubmitting ? "Saving..." : "Generate My Skin Report ✨"

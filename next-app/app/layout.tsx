@@ -2,6 +2,7 @@ import { Cormorant_Garamond, DM_Mono, DM_Sans } from "next/font/google"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { SupabaseProvider } from "@/components/supabase-provider"
 import { cn } from "@/lib/utils"
 
 const heading = Cormorant_Garamond({
@@ -33,7 +34,9 @@ export default function RootLayout({
       className={cn("dark antialiased", heading.variable, sans.variable, mono.variable)}
     >
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <SupabaseProvider>{children}</SupabaseProvider>
+        </ThemeProvider>
       </body>
     </html>
   )
