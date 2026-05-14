@@ -16,6 +16,13 @@ export const textModel = genAI.getGenerativeModel({
   generationConfig: { temperature: 0.6, maxOutputTokens: 800 },
 })
 
+export function getTextModel() {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('Missing GEMINI_API_KEY')
+  }
+  return textModel
+}
+
 export const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY ?? '',
 })
