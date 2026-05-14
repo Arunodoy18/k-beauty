@@ -40,10 +40,6 @@ export function AuthForm({ mode }: AuthFormProps) {
         const { data, error: signupError } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,
-          options: {
-            emailRedirectTo:
-              typeof window === "undefined" ? undefined : `${window.location.origin}/home`,
-          },
         })
 
         if (signupError) {
@@ -51,13 +47,20 @@ export function AuthForm({ mode }: AuthFormProps) {
           return
         }
 
-        if (data.session) {
-          router.replace("/home")
-          router.refresh()
-          return
+        if (!data.session) {
+          const { error: loginAfterSignupError } = await supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password,
+          })
+
+          if (loginAfterSignupError) {
+            setMessage("Account created. Please log in to continue.")
+            return
+          }
         }
 
-        setMessage("Account created. Check your email to confirm your sign up.")
+        router.replace("/home")
+        router.refresh()
         return
       }
 
