@@ -1,4 +1,4 @@
-import { textModel, parseGeminiJSON } from "@/lib/gemini";
+import { getTextModel, parseGeminiJSON } from "@/lib/gemini";
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -98,6 +98,17 @@ Return ONLY this JSON:
 }`;
 
     let whyCopy;
+    let textModel;
+    try {
+      textModel = getTextModel();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Missing GEMINI_API_KEY";
+      return NextResponse.json(
+        { error: "missing_ai_key", message },
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
     try {
       const result = await textModel.generateContent(prompt);
       whyCopy = parseGeminiJSON(result.response.text());

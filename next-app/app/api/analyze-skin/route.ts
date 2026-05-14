@@ -1,7 +1,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { parseGeminiJSON, skinModel } from "@/lib/gemini";
+import { parseGeminiJSON, getSkinModel } from "@/lib/gemini";
 
 type GeminiReport = {
   overallGlowScore: number;
@@ -99,6 +99,17 @@ Just the JSON object.`;
 }`;
 
     let result;
+    let skinModel;
+
+    try {
+      skinModel = getSkinModel();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Missing GEMINI_API_KEY";
+      return NextResponse.json(
+        { error: "missing_ai_key", message },
+        { status: 500, headers: corsHeaders }
+      );
+    }
 
     // -- PATH 1: PHOTO ANALYSIS --
     try {
