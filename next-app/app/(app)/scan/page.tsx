@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Camera, Upload, Sun, Sparkles, User, RefreshCw, AlertCircle, FlipHorizontal } from "lucide-react";
 import { useAppContext } from "@/components/app/app-context";
 import { useSupabaseClient } from "@/components/supabase-provider";
+import { getApiUrl } from "@/lib/api";
 
 type ScanState = "idle" | "live" | "preview" | "analyzing" | "error";
 
@@ -318,7 +319,7 @@ export default function ScanPage() {
         payload.quizAnswers = quizAnswers;
       }
 
-      const res = await fetch("/api/analyze-skin", {
+      const res = await fetch(getApiUrl("/api/analyze-skin"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)

@@ -12,6 +12,17 @@ type GeminiReport = {
   routineComplexity: string;
 };
 
+const corsOrigin = process.env.CORS_ALLOW_ORIGIN || process.env.NEXT_PUBLIC_APP_URL || "*";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": corsOrigin,
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders });
+}
+
 export async function POST(req: NextRequest) {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,21 +35,21 @@ export async function POST(req: NextRequest) {
     if (!userId) {
       return NextResponse.json(
         { error: "missing_field", message: "userId is required" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
     if (!city) {
       return NextResponse.json(
         { error: "missing_field", message: "city is required" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
     if (!photoBase64 && !quizAnswers) {
       return NextResponse.json(
         { error: "missing_field", message: "Send either photoBase64 or quizAnswers" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -57,7 +68,7 @@ export async function POST(req: NextRequest) {
           error: "rate_limited",
           message: "You already scanned today. Check back tomorrow.",
         },
-        { status: 429 }
+        { status: 429, headers: corsHeaders }
       );
     }
 
@@ -136,14 +147,14 @@ ${jsonSchema}`,
             error: "unclear_image",
             message: "Please retake in better lighting with a clear face shot.",
           },
-          { status: 422 }
+          { status: 422, headers: corsHeaders }
         );
       }
 
       console.error("Gemini error:", err);
       return NextResponse.json(
         { error: "ai_error", message: "Failed to analyze the skin report." },
-        { status: 500 }
+        { status: 500, headers: corsHeaders }
       );
     }
 
@@ -155,7 +166,7 @@ ${jsonSchema}`,
     } catch {
       return NextResponse.json(
         { error: "parse_failed", message: "Could not read the skin analysis. Please retake." },
-        { status: 500 }
+        { status: 500, headers: corsHeaders }
       );
     }
 
@@ -176,15 +187,15 @@ ${jsonSchema}`,
 
     if (dbError) {
       console.error("Supabase insert error:", dbError);
-      return NextResponse.json({ reportId: "temp-" + Date.now(), ...report });
+      return NextResponse.json({ reportId: "temp-" + Date.now(), ...report }, { headers: corsHeaders });
     }
 
-    return NextResponse.json({ reportId: saved.id, ...report });
+    return NextResponse.json({ reportId: saved.id, ...report }, { headers: corsHeaders });
   } catch (err: unknown) {
     console.error("Analyze skin error:", err);
     return NextResponse.json(
       { error: "server_error", message: "Something went wrong. Please try again." },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }

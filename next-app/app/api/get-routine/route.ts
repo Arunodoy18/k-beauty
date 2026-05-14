@@ -1,42 +1,49 @@
 import { textModel, parseGeminiJSON } from "@/lib/gemini";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
 type ReportConcern = { name?: string };
 
+const corsOrigin = process.env.CORS_ALLOW_ORIGIN || process.env.NEXT_PUBLIC_APP_URL || "*";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": corsOrigin,
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders });
+}
+
 export async function GET(req: NextRequest) {
   const reportId = req.nextUrl.searchParams.get("reportId");
+  const userId = req.nextUrl.searchParams.get("userId");
 
-  if (!reportId) {
+  if (!reportId || !userId) {
     return NextResponse.json(
-      { error: "missing_params", message: "reportId is required" },
-      { status: 400 }
+      { error: "missing_params", message: "reportId and userId are required" },
+      { status: 400, headers: corsHeaders }
     );
   }
 
-  const supabase = createSupabaseServerClient();
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
   try {
-    const { data: auth, error: authError } = await supabase.auth.getUser();
-    if (authError || !auth?.user) {
-      return NextResponse.json(
-        { error: "unauthorized", message: "You must be signed in." },
-        { status: 401 }
-      );
-    }
-
     // 1. Fetch report
     const { data: report, error: reportError } = await supabase
       .from("skin_reports")
       .select("*")
       .eq("id", reportId)
-      .eq("user_id", auth.user.id)
+      .eq("user_id", userId)
       .single();
 
     if (reportError || !report) {
       return NextResponse.json(
         { error: "report_not_found", message: "Report not found" },
-        { status: 404 }
+        { status: 404, headers: corsHeaders }
       );
     }
 
@@ -98,7 +105,7 @@ Return ONLY this JSON:
       console.error("Gemini routine copy error:", err);
       return NextResponse.json(
         { error: "ai_error", message: "Failed to generate routine copy" },
-        { status: 500 }
+        { status: 500, headers: corsHeaders }
       );
     }
 
@@ -109,12 +116,12 @@ Return ONLY this JSON:
         products: products ?? [],
         personalizedCopy: whyCopy,
       },
-    });
+    }, { headers: corsHeaders });
   } catch (error) {
     console.error("Error building routine:", error);
     return NextResponse.json(
       { error: "server_error", message: "Failed to build routine" },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }

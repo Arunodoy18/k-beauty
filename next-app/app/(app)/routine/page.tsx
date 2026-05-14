@@ -6,6 +6,8 @@ import { motion } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { ShieldCheck, CheckCircle2, Sun } from "lucide-react";
+import { useSupabaseClient } from "@/components/supabase-provider";
+import { getApiUrl } from "@/lib/api";
 
 // Mock Data
 const MOCK_ROUTINE = {
@@ -246,6 +248,7 @@ const buildRoutineFromApi = (payload: RoutinePayload) => {
 export default function RoutinePage() {
   const searchParams = useSearchParams();
   const reportId = searchParams?.get("reportId") || searchParams?.get("id");
+  const supabase = useSupabaseClient();
   const [loading, setLoading] = useState(true);
   const [routineData, setRoutineData] = useState(MOCK_ROUTINE);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -263,8 +266,16 @@ export default function RoutinePage() {
       setErrorMessage(null);
 
       try {
+        const { data: auth, error: authError } = await supabase.auth.getUser();
+
+        if (authError || !auth?.user) {
+          throw new Error("Please log in to view your routine.");
+        }
+
         const res = await fetch(
-          `/api/get-routine?reportId=${encodeURIComponent(reportId)}`
+          getApiUrl(
+            `/api/get-routine?reportId=${encodeURIComponent(reportId)}&userId=${encodeURIComponent(auth.user.id)}`
+          )
         );
         const payload: RoutineApiResponse = await res.json();
 
