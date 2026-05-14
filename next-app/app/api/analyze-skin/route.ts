@@ -151,7 +151,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-different oiliness patterns. The user is from ${city}.
     let report: GeminiReport;
     let usedFallback = false;
 
