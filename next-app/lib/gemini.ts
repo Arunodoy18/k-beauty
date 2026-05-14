@@ -16,15 +16,17 @@ export function getGeminiClient() {
 }
 
 export function getSkinModel() {
+  const model = process.env.GEMINI_SKIN_MODEL || 'gemini-pro-vision'
   return getGeminiClient().getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model,
     generationConfig: { temperature: 0.3, maxOutputTokens: 1500 },
   })
 }
 
 export function getTextModel() {
+  const model = process.env.GEMINI_TEXT_MODEL || 'gemini-pro'
   return getGeminiClient().getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model,
     generationConfig: { temperature: 0.6, maxOutputTokens: 800 },
   })
 }
