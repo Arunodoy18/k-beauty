@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "prebuild": "npm --prefix next-app install",
     "build": "node -e \"const fs=require('fs');const path=require('path');const {execSync}=require('child_process');execSync('npm --prefix next-app run build',{stdio:'inherit'});const out=path.join(process.cwd(),'.next');const src=path.join(process.cwd(),'next-app','.next');fs.rmSync(out,{recursive:true,force:true});fs.cpSync(src,out,{recursive:true});\"",
     "dev": "npm --prefix next-app run dev",
     "lint": "npm --prefix next-app run lint"
