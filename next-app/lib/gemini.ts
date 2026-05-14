@@ -17,7 +17,7 @@ export function getGeminiClient() {
 
 export function getSkinModel() {
   return getGeminiClient().getGenerativeModel({
-    model: 'gemini-1.5-pro',
+    model: 'gemini-1.5-flash',
     generationConfig: { temperature: 0.3, maxOutputTokens: 1500 },
   })
 }
