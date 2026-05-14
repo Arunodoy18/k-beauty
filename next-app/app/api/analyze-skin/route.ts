@@ -1,7 +1,12 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { parseGeminiJSON, getSkinModel } from "@/lib/gemini";
+import {
+  skinModel,
+  textModel,
+  parseGeminiJSON,
+  analyzeWithGroq,
+} from "@/lib/gemini";
 
 type GeminiReport = {
   overallGlowScore: number;
@@ -21,6 +26,80 @@ const corsHeaders = {
 
 export function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: corsHeaders });
+}
+
+function getJsonSchema(city: string) {
+  return `{
+  "overallGlowScore": number 0-100,
+  "skinType": "oily"|"dry"|"combination"|"normal"|"sensitive",
+  "concerns": [{
+    "name": string,
+    "score": number 0-100,
+    "severity": "mild"|"moderate"|"high",
+    "explanation": string (2 sentences for Indian skin),
+    "recommendedIngredient": string
+  }],
+  "insights": [{ "finding": string, "explanation": string }],
+  "climateNote": string (specific to ${city}),
+  "routineComplexity": "basic"|"intermediate"|"advanced"
+}`
+}
+
+async function runAnalysis(
+  photoBase64: string | undefined,
+  quizAnswers: object | undefined,
+  city: string
+) {
+  const systemPrompt = `You are an expert Korean skincare dermatologist 
+specializing in Indian skin. The user is from ${city}. 
+Return ONLY raw valid JSON — no markdown, no backticks.`
+
+  if (photoBase64) {
+    try {
+      const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, "");
+
+      const result = await skinModel.generateContent([
+        systemPrompt,
+        {
+          inlineData: { mimeType: "image/jpeg", data: base64Data },
+        },
+        `Analyze this skin photo carefully. Return this JSON: ${getJsonSchema(city)}`,
+      ]);
+
+      const report = parseGeminiJSON(result.response.text());
+      return { report, usedFallback: false };
+    } catch (geminiErr: unknown) {
+      console.error("Gemini photo failed:", geminiErr);
+      try {
+        const report = await analyzeWithGroq(city);
+        return { report, usedFallback: true };
+      } catch (groqErr: unknown) {
+        console.error("Groq also failed:", groqErr);
+        throw new Error("Both AI services failed. Please try again.");
+      }
+    }
+  }
+
+  if (quizAnswers) {
+    try {
+      const result = await textModel.generateContent(
+        `${systemPrompt}\n\nQuiz: ${JSON.stringify(quizAnswers)}\n\nReturn: ${getJsonSchema(city)}`
+      );
+      const report = parseGeminiJSON(result.response.text());
+      return { report, usedFallback: false };
+    } catch (geminiErr: unknown) {
+      console.error("Gemini quiz failed:", geminiErr);
+      try {
+        const report = await analyzeWithGroq(city, quizAnswers);
+        return { report, usedFallback: true };
+      } catch (groqErr: unknown) {
+        console.error("Groq also failed:", groqErr);
+        throw new Error("Both AI services failed. Please try again.");
+      }
+    }
+  }
+
+  throw new Error("Send either photoBase64 or quizAnswers");
 }
 
 export async function POST(req: NextRequest) {
@@ -72,84 +151,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const systemPrompt = `You are an expert Korean skincare dermatologist
-specializing in Indian skin types. Indian skin has higher melanin (prone to
-post-inflammatory hyperpigmentation), varies greatly by city climate, and has
 different oiliness patterns. The user is from ${city}.
-Return ONLY raw valid JSON - no markdown, no backticks, no explanation.
-Just the JSON object.`;
-
-    const jsonSchema = `{
-  "overallGlowScore": number between 0-100,
-  "skinType": "oily" | "dry" | "combination" | "normal" | "sensitive",
-  "concerns": [
-    {
-      "name": string,
-      "score": number (0-100, higher = more concern),
-      "severity": "mild" | "moderate" | "high",
-      "explanation": string (2 sentences personalized for Indian skin),
-      "recommendedIngredient": string
-    }
-  ],
-  "insights": [
-    { "finding": string, "explanation": string }
-  ],
-  "climateNote": string (skincare advice specific to ${city} weather and pollution),
-  "routineComplexity": "basic" | "intermediate" | "advanced"
-}`;
-
-    let result;
-    let skinModel;
+    let report: GeminiReport;
+    let usedFallback = false;
 
     try {
-      skinModel = getSkinModel();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Missing GEMINI_API_KEY";
-      return NextResponse.json(
-        { error: "missing_ai_key", message },
-        { status: 500, headers: corsHeaders }
+      const result = await runAnalysis(
+        photoBase64,
+        quizAnswers,
+        city ?? "Mumbai"
       );
-    }
-
-    // -- PATH 1: PHOTO ANALYSIS --
-    try {
-      if (photoBase64) {
-        const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, "");
-
-        result = await skinModel.generateContent([
-          systemPrompt,
-          {
-            inlineData: {
-              mimeType: "image/jpeg",
-              data: base64Data,
-            },
-          },
-          `Analyze this person's skin photo carefully.
-Focus on: texture, oiliness/dryness, visible pores, acne or blemishes,
-pigmentation or dark spots, skin tone evenness, hydration levels,
-and any redness or sensitivity signs.
-Return this exact JSON schema:
-${jsonSchema}`,
-        ]);
-      } else if (quizAnswers) {
-        result = await skinModel.generateContent([
-          systemPrompt,
-          `Based on this skin quiz data from a user in ${city}:
-${JSON.stringify(quizAnswers, null, 2)}
-
-Quiz key:
-- skinFeel: how skin feels 2hrs after washing
-- breakoutFrequency: how often they get breakouts
-- poreVisibility: how visible their pores are
-- sensitivity: how often skin reacts to products
-- pigmentationScore: 1-5 (5 = very concerned)
-- dullnessScore: 1-5 (5 = very concerned)
-
-Generate an accurate skin report estimate.
-Return this exact JSON schema:
-${jsonSchema}`,
-        ]);
-      }
+      report = result.report as GeminiReport;
+      usedFallback = result.usedFallback;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "";
       if (message.includes("SAFETY")) {
@@ -162,21 +175,8 @@ ${jsonSchema}`,
         );
       }
 
-      console.error("Gemini error:", err);
       return NextResponse.json(
-        { error: "ai_error", message: "Failed to analyze the skin report." },
-        { status: 500, headers: corsHeaders }
-      );
-    }
-
-    // -- PARSE GEMINI RESPONSE --
-    const raw = result?.response.text() ?? "";
-    let report: GeminiReport;
-    try {
-      report = parseGeminiJSON<GeminiReport>(raw);
-    } catch {
-      return NextResponse.json(
-        { error: "parse_failed", message: "Could not read the skin analysis. Please retake." },
+        { error: "ai_error", message: message || "Failed to analyze the skin report." },
         { status: 500, headers: corsHeaders }
       );
     }
@@ -198,10 +198,16 @@ ${jsonSchema}`,
 
     if (dbError) {
       console.error("Supabase insert error:", dbError);
-      return NextResponse.json({ reportId: "temp-" + Date.now(), ...report }, { headers: corsHeaders });
+      return NextResponse.json(
+        { reportId: "temp-" + Date.now(), usedFallback, ...report },
+        { headers: corsHeaders }
+      );
     }
 
-    return NextResponse.json({ reportId: saved.id, ...report }, { headers: corsHeaders });
+    return NextResponse.json(
+      { reportId: saved.id, usedFallback, ...report },
+      { headers: corsHeaders }
+    );
   } catch (err: unknown) {
     console.error("Analyze skin error:", err);
     return NextResponse.json(
