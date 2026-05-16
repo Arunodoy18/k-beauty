@@ -305,7 +305,7 @@ export default function RoutinePage() {
     return () => {
       isMounted = false;
     };
-  }, [reportId]);
+  }, [reportId, supabase]);
 
   if (loading) {
     return (

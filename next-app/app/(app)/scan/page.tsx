@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, FlipHorizontal, Upload, AlertTriangle } from "lucide-react";
@@ -107,7 +107,7 @@ const questionMotion = {
   initial: { x: 60, opacity: 0 },
   animate: { x: 0, opacity: 1 },
   exit: { x: -60, opacity: 0 },
-  transition: { type: "spring", stiffness: 300, damping: 30 },
+  transition: { type: "spring" as const, stiffness: 300, damping: 30 },
 };
 
 export default function ScanPage() {
@@ -196,14 +196,14 @@ export default function ScanPage() {
     setIsMobile(typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
   }, []);
 
-  const stopCamera = () => {
+  const stopCamera = useCallback(() => {
     const stream = videoRef.current?.srcObject as MediaStream | null;
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
     }
-  };
+  }, []);
 
-  const startCamera = async () => {
+  const startCamera = useCallback(async () => {
     setCameraError(null);
     stopCamera();
     try {
@@ -225,7 +225,7 @@ export default function ScanPage() {
       else if (name === "NotFoundError") setCameraError("not_found");
       else setCameraError("unknown");
     }
-  };
+  }, [facingMode, stopCamera]);
 
   useEffect(() => {
     if (stage === "camera") {
@@ -233,7 +233,7 @@ export default function ScanPage() {
     } else {
       stopCamera();
     }
-  }, [stage, facingMode]);
+  }, [stage, startCamera, stopCamera]);
 
   useEffect(() => {
     return () => {
