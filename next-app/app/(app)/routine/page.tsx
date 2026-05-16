@@ -1,15 +1,17 @@
-
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { useSearchParams } from "next/navigation";
-import Image from "next/image";
-import { ShieldCheck, CheckCircle2, Sun } from "lucide-react";
-import { useSupabaseClient } from "@/components/supabase-provider";
+import { useRouter, useSearchParams } from "next/navigation";
+import { CheckCircle2, ShieldCheck, Sun } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
 import { getApiUrl } from "@/lib/api";
 
-// Mock Data
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
 const MOCK_ROUTINE = {
   skinType: "Oily / Acne-prone / Pigmentation",
   city: "Mumbai",
@@ -27,7 +29,7 @@ const MOCK_ROUTINE = {
         image: "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=200&q=80",
         ingredients: ["Salicylic Acid 0.5%", "Tea Tree Oil"],
         whyForYou: "Unclogs pores for oily skin",
-      }
+      },
     },
     {
       id: "r2",
@@ -42,7 +44,7 @@ const MOCK_ROUTINE = {
         image: "https://images.unsplash.com/photo-1608248593842-8021b1990c0a?auto=format&fit=crop&w=200&q=80",
         ingredients: ["AHA", "BHA", "Vitamin C"],
         whyForYou: "Gently exfoliates & brightens",
-      }
+      },
     },
     {
       id: "r3",
@@ -57,7 +59,7 @@ const MOCK_ROUTINE = {
         image: "https://images.unsplash.com/photo-1629198688000-71f23e745b6e?auto=format&fit=crop&w=200&q=80",
         ingredients: ["Niacinamide 5%", "Squalane"],
         whyForYou: "Fades dark spots effectively",
-      }
+      },
     },
     {
       id: "r4",
@@ -72,7 +74,7 @@ const MOCK_ROUTINE = {
         image: "https://images.unsplash.com/photo-1615397323145-2070e633d7b8?auto=format&fit=crop&w=200&q=80",
         ingredients: ["5 Types HA", "Centella"],
         whyForYou: "Gel texture won't clog pores",
-      }
+      },
     },
     {
       id: "r5",
@@ -87,8 +89,8 @@ const MOCK_ROUTINE = {
         image: "https://images.unsplash.com/photo-1625772299848-391b6a87d7b3?auto=format&fit=crop&w=200&q=80",
         ingredients: ["SPF50+ PA++++", "Birch Sap"],
         whyForYou: "No white cast, soothing",
-      }
-    }
+      },
+    },
   ],
   addons: [
     {
@@ -97,7 +99,7 @@ const MOCK_ROUTINE = {
       brand: "I'm From",
       price: 850,
       image: "https://images.unsplash.com/photo-1596755389378-c31d21fd1273?auto=format&fit=crop&w=200&q=80",
-      type: "Soothing"
+      type: "Soothing",
     },
     {
       id: "a2",
@@ -105,7 +107,7 @@ const MOCK_ROUTINE = {
       brand: "COSRX",
       price: 350,
       image: "https://images.unsplash.com/photo-1611078519183-fbd9a7e6b815?auto=format&fit=crop&w=200&q=80",
-      type: "Spot Treatment"
+      type: "Spot Treatment",
     },
     {
       id: "a3",
@@ -113,9 +115,9 @@ const MOCK_ROUTINE = {
       brand: "Beauty of Joseon",
       price: 1450,
       image: "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?auto=format&fit=crop&w=200&q=80",
-      type: "Reapplication"
-    }
-  ]
+      type: "Reapplication",
+    },
+  ],
 };
 
 type ProductRecord = {
@@ -142,6 +144,11 @@ type RoutineApiResponse = {
   data?: RoutinePayload;
 };
 
+type ReportRecord = {
+  id?: string;
+  user_id?: string;
+};
+
 type MockProduct = (typeof MOCK_ROUTINE)["routine"][number]["product"];
 
 type RoutineProductCard = {
@@ -156,12 +163,7 @@ type RoutineProductCard = {
 
 const containerVariants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
-};
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
+  visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
 };
 
 const STEP_DEFINITIONS = [
@@ -201,9 +203,7 @@ const mapProductCard = (
     name: product?.name || fallback?.name || "Recommended product",
     price: typeof product?.price_inr === "number" ? product.price_inr : fallback?.price || 0,
     image: product?.image_url || fallback?.image || "",
-    ingredients: Array.isArray(product?.key_ingredients)
-      ? product.key_ingredients
-      : fallback?.ingredients || [],
+    ingredients: Array.isArray(product?.key_ingredients) ? product.key_ingredients : fallback?.ingredients || [],
     whyForYou: whyText || fallback?.whyForYou || "Tailored for your skin profile.",
     affiliateUrl: product?.affiliate_url || "",
   };
@@ -214,6 +214,11 @@ const getAffiliateUrl = (product: { affiliateUrl?: string; brand?: string; name?
   const query = [product?.brand, product?.name].filter(Boolean).join(" ").trim();
   if (!query) return "https://www.amazon.in";
   return `https://www.amazon.in/s?k=${encodeURIComponent(query)}`;
+};
+
+const buildPlaceholder = (name?: string) => {
+  const text = (name || "PR").slice(0, 2).toUpperCase();
+  return `https://placehold.co/200x200/1F1015/C49A6C/png?text=${encodeURIComponent(text)}`;
 };
 
 const buildRoutineFromApi = (payload: RoutinePayload) => {
@@ -245,36 +250,78 @@ const buildRoutineFromApi = (payload: RoutinePayload) => {
   };
 };
 
+function RoutineSkeleton() {
+  return (
+    <div className="min-h-screen bg-[#0F172A] text-white p-6 pb-32">
+      <div className="animate-pulse space-y-8">
+        <div className="h-8 bg-gray-800 rounded w-3/4 mx-auto mt-12"></div>
+        <div className="h-4 bg-gray-800 rounded w-1/2 mx-auto"></div>
+        <div className="h-6 bg-gray-800 rounded-full w-2/3 mx-auto"></div>
+
+        <div className="space-y-6 mt-12">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-48 bg-gray-800 rounded-2xl w-full"></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function RoutinePage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const reportId = searchParams?.get("reportId") || searchParams?.get("id");
-  const supabase = useSupabaseClient();
+
   const [loading, setLoading] = useState(true);
-  const [routineData, setRoutineData] = useState(MOCK_ROUTINE);
+  const [routineData, setRoutineData] = useState<typeof MOCK_ROUTINE | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
+    if (!reportId) {
+      setErrorMessage("No report ID in URL");
+      setLoading(false);
+      return;
+    }
 
-    const loadRoutine = async () => {
-      if (!reportId) {
-        setLoading(false);
-        return;
-      }
-
+    const fetchRoutine = async () => {
       setLoading(true);
       setErrorMessage(null);
 
       try {
-        const { data: auth, error: authError } = await supabase.auth.getUser();
+        const { data, error: dbError } = await supabase
+          .from("skin_reports")
+          .select("id,user_id")
+          .eq("id", reportId)
+          .single();
 
-        if (authError || !auth?.user) {
-          throw new Error("Please log in to view your routine.");
+        let reportRow: ReportRecord | null = data;
+
+        if (dbError || !data) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          const { data: retry, error: retryErr } = await supabase
+            .from("skin_reports")
+            .select("id,user_id")
+            .eq("id", reportId)
+            .single();
+
+          if (retryErr || !retry) {
+            setErrorMessage("Could not load your report. Please try scanning again.");
+            setLoading(false);
+            return;
+          }
+          reportRow = retry;
+        }
+
+        if (!reportRow?.user_id) {
+          setErrorMessage("Could not load your report. Please try scanning again.");
+          setLoading(false);
+          return;
         }
 
         const res = await fetch(
           getApiUrl(
-            `/api/get-routine?reportId=${encodeURIComponent(reportId)}&userId=${encodeURIComponent(auth.user.id)}`
+            `/api/get-routine?reportId=${encodeURIComponent(reportId)}&userId=${encodeURIComponent(reportRow.user_id)}`
           )
         );
         const payload: RoutineApiResponse = await res.json();
@@ -284,57 +331,54 @@ export default function RoutinePage() {
         }
 
         const nextRoutine = buildRoutineFromApi(payload.data ?? {});
-
-        if (isMounted) {
-          setRoutineData(nextRoutine);
-        }
+        setRoutineData(nextRoutine);
       } catch (err: unknown) {
-        if (isMounted) {
-          const message = err instanceof Error ? err.message : "Unable to load routine.";
-          setErrorMessage(message);
-          setRoutineData(MOCK_ROUTINE);
-        }
+        const message = err instanceof Error ? err.message : "Unable to load routine.";
+        setErrorMessage(message);
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     };
 
-    loadRoutine();
-    return () => {
-      isMounted = false;
-    };
-  }, [reportId, supabase]);
+    fetchRoutine();
+  }, [reportId]);
 
   if (loading) {
+    return <RoutineSkeleton />;
+  }
+
+  if (errorMessage || !routineData) {
     return (
-      <div className="min-h-screen bg-[#0F172A] text-white p-6 pb-32">
-        <div className="animate-pulse space-y-8">
-          <div className="h-8 bg-gray-800 rounded w-3/4 mx-auto mt-12"></div>
-          <div className="h-4 bg-gray-800 rounded w-1/2 mx-auto"></div>
-          <div className="h-6 bg-gray-800 rounded-full w-2/3 mx-auto"></div>
-          
-          <div className="space-y-6 mt-12">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-48 bg-gray-800 rounded-2xl w-full"></div>
-            ))}
-          </div>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center">
+        <p style={{ fontFamily: "Cormorant Garamond", fontSize: 28, color: "#C49A6C" }}>
+          Something went wrong
+        </p>
+        <p style={{ color: "#9A7A70", marginTop: 8, fontSize: 14 }}>
+          {errorMessage ?? "Report not found"}
+        </p>
+        <button
+          onClick={() => router.push("/scan")}
+          style={{
+            marginTop: 24,
+            padding: "14px 32px",
+            background: "#D4856A",
+            color: "white",
+            borderRadius: 12,
+            border: "none",
+            fontSize: 15,
+            cursor: "pointer",
+          }}
+        >
+          Take a New Scan
+        </button>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-[#0F172A] text-white font-sans pb-32">
-      <motion.div 
-        variants={containerVariants} 
-        initial="hidden" 
-        animate="visible"
-        className="max-w-md mx-auto pt-10"
-      >
-        {/* HEADER */}
-        <motion.div variants={itemVariants} className="px-6 text-center mb-8">
+      <motion.div variants={containerVariants} initial="hidden" animate="visible" className="max-w-md mx-auto pt-10">
+        <motion.div className="px-6 text-center mb-8">
           <h1 className="text-4xl text-[#D4AF37] italic mb-3 leading-tight font-heading">
             Your K-Beauty Routine
           </h1>
@@ -347,62 +391,63 @@ export default function RoutinePage() {
         </motion.div>
 
         {errorMessage && (
-          <motion.div variants={itemVariants} className="px-6 mb-6">
+          <motion.div className="px-6 mb-6">
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
               {errorMessage}
             </div>
           </motion.div>
         )}
 
-        {/* ROUTINE STEPS */}
         <div className="px-5 space-y-6 mb-12">
-          {routineData.routine.map((step) => {
+          {routineData.routine.map((step, index) => {
             const affiliateUrl = getAffiliateUrl(step.product);
+            const imageUrl = step.product.image || buildPlaceholder(step.product.name);
 
             return (
-              <motion.div 
-                variants={itemVariants} 
-                key={step.id} 
+              <motion.div
+                key={step.id}
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.15, duration: 0.4, ease: [0.22, 0.68, 0, 1.1] }}
                 className="bg-[#111827] border border-gray-800 rounded-3xl overflow-hidden relative shadow-lg"
               >
-                {/* Step Header */}
                 <div className="bg-[#1F2937]/50 p-4 border-b border-gray-800 flex justify-between items-start">
                   <div>
                     <span className="text-[#D4AF37] font-bold text-xs uppercase tracking-wider block mb-1">
-                      Step {step.stepNumber} &middot; {step.timing}
+                      Step {step.stepNumber} · {step.timing}
                     </span>
                     <h2 className="text-lg font-bold">{step.stepName}</h2>
-                    <p className="text-gray-400 text-xs mt-1 leading-relaxed">
-                      {step.why}
-                    </p>
+                    <p className="text-gray-400 text-xs mt-1 leading-relaxed">{step.why}</p>
                   </div>
                 </div>
 
-                {/* Product Area */}
                 <div className="p-4 flex gap-4">
                   <div className="w-24 h-24 shrink-0 rounded-2xl bg-gray-800 overflow-hidden relative border border-gray-700">
-                    <Image 
-                      src={step.product.image} 
-                      alt={step.product.name} 
-                      fill
-                      sizes="96px"
-                      className="object-cover"
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={imageUrl}
+                      alt={step.product.name}
+                      onError={(e) => {
+                        e.currentTarget.src = "/placeholder-product.png";
+                        e.currentTarget.onerror = null;
+                      }}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 12 }}
                     />
                   </div>
-                  
+
                   <div className="flex-1 flex flex-col justify-between">
                     <div>
                       <p className="text-xs text-gray-400 font-semibold mb-0.5">{step.product.brand}</p>
                       <h3 className="font-medium text-sm leading-tight mb-2 line-clamp-2">{step.product.name}</h3>
-                      
+
                       <div className="flex flex-wrap gap-1 mb-2">
-                        {step.product.ingredients.map(ing => (
-                          <span key={ing} className="bg-gray-800 text-[10px] px-2 py-0.5 rounded text-gray-300">
-                            {ing}
+                        {step.product.ingredients.map((ingredient) => (
+                          <span key={ingredient} className="bg-gray-800 text-[10px] px-2 py-0.5 rounded text-gray-300">
+                            {ingredient}
                           </span>
                         ))}
                       </div>
-                      
+
                       <p className="text-[11px] text-[#D4AF37] flex items-center gap-1 font-medium">
                         <CheckCircle2 className="w-3 h-3" /> {step.product.whyForYou}
                       </p>
@@ -426,55 +471,67 @@ export default function RoutinePage() {
           })}
         </div>
 
-        {/* UPSELL SECTION */}
-        <motion.div variants={itemVariants} className="mb-10 w-full overflow-hidden">
+        <motion.div className="mb-10 w-full overflow-hidden">
           <div className="px-6 mb-4 flex items-center gap-2">
             <h2 className="text-lg font-bold">Add-ons for your concerns</h2>
           </div>
-          
+
           <div className="flex overflow-x-auto gap-4 px-6 pb-4 snap-x hide-scrollbar">
-            {routineData.addons.map(addon => {
+            {routineData.addons.map((addon) => {
               const affiliateUrl = getAffiliateUrl(addon);
-              
+              const imageUrl = addon.image || buildPlaceholder(addon.name);
+
               return (
-                <div 
+                <div
                   key={addon.id}
                   className="snap-start shrink-0 w-40 bg-[#111827] border border-gray-800 rounded-2xl p-3 flex flex-col relative"
                 >
-                   <div className="h-32 w-full rounded-xl bg-gray-800 mb-3 overflow-hidden relative">
-                     <Image src={addon.image} alt={addon.name} fill sizes="160px" className="object-cover" />
-                     <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md text-[9px] px-2 py-0.5 rounded-full text-white font-medium uppercase tracking-wide">
-                        {addon.type}
-                     </div>
-                   </div>
-                   <p className="text-[10px] text-gray-400 font-semibold truncate">{addon.brand}</p>
-                   <h3 className="font-medium text-xs mb-2 line-clamp-2 leading-tight flex-1">{addon.name}</h3>
-                   <div className="flex items-center justify-between mt-auto">
-                      <span className="font-bold text-sm">?{addon.price}</span>
-                      <a
-                        href={affiliateUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[10px] font-semibold px-2 py-1 rounded-full bg-white text-black"
-                      >
-                        Buy
-                      </a>
-                   </div>
+                  <div className="h-32 w-full rounded-xl bg-gray-800 mb-3 overflow-hidden relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={imageUrl}
+                      alt={addon.name}
+                      onError={(e) => {
+                        e.currentTarget.src = "/placeholder-product.png";
+                        e.currentTarget.onerror = null;
+                      }}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 12 }}
+                    />
+                    <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md text-[9px] px-2 py-0.5 rounded-full text-white font-medium uppercase tracking-wide">
+                      {addon.type}
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-400 font-semibold truncate">{addon.brand}</p>
+                  <h3 className="font-medium text-xs mb-2 line-clamp-2 leading-tight flex-1">{addon.name}</h3>
+                  <div className="flex items-center justify-between mt-auto">
+                    <span className="font-bold text-sm">?{addon.price}</span>
+                    <a
+                      href={affiliateUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10px] font-semibold px-2 py-1 rounded-full bg-white text-black"
+                    >
+                      Buy
+                    </a>
+                  </div>
                 </div>
               );
             })}
           </div>
         </motion.div>
-        
-        {/* TRUST BADGES */}
-        <motion.div variants={itemVariants} className="px-6 mb-8 flex justify-center gap-6 text-xs text-gray-400 font-medium">
-           <div className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-[#D4AF37]" /> Authentic</div>
-           <div className="flex items-center gap-1.5"><Sun className="w-4 h-4 text-[#D4AF37]" /> Dermatologist vetted</div>
-        </motion.div>
 
+        <motion.div className="px-6 mb-8 flex justify-center gap-6 text-xs text-gray-400 font-medium">
+          <div className="flex items-center gap-1.5">
+            <ShieldCheck className="w-4 h-4 text-[#D4AF37]" /> Authentic
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Sun className="w-4 h-4 text-[#D4AF37]" /> Dermatologist vetted
+          </div>
+        </motion.div>
       </motion.div>
 
-      <style dangerouslySetInnerHTML={{__html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         .hide-scrollbar::-webkit-scrollbar {
           display: none;
         }
@@ -482,8 +539,8 @@ export default function RoutinePage() {
           -ms-overflow-style: none;
           scrollbar-width: none;
         }
-      `}} />
+      `,
+      }} />
     </div>
   );
 }
-

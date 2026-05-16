@@ -1,41 +1,11 @@
-
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import type { Variants } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
-import { 
-  Droplets, AlertCircle, Sun, Activity, Maximize, MapPin,
-  Share2, Download, RefreshCw, ArrowRight, Sparkles, ChevronDown, CheckCircle2
-} from "lucide-react";
-import { useAppContext } from "@/components/app/app-context";
-import { useSupabaseClient } from "@/components/supabase-provider";
-
-// Mock Data (In real app, fetch via reportId or global store)
-const MOCK_REPORT = {
-  score: 72,
-  city: "Mumbai",
-  date: "May 2026",
-  concerns: [
-    { id: "c1", name: "Acne", icon: AlertCircle, score: 30, severity: "Needs attention",
-      aiText: "Active clusters along the jawline typically indicate hormonal factors or trapped sebum. Prioritize gentle exfoliation." },
-    { id: "c2", name: "Pigmentation", icon: Sun, score: 60, severity: "Moderate",
-      aiText: "Mild sun spots detected on cheeks. Daily SPF and Vitamin C will prevent deepening." },
-    { id: "c3", name: "Hydration", icon: Droplets, score: 85, severity: "Mild",
-      aiText: "Skin barrier looks intact. Keep up with lightweight moisturizing layers." },
-    { id: "c4", name: "Texture", icon: Activity, score: 55, severity: "Moderate",
-      aiText: "Slight unevenness in the T-zone. Niacinamide can help smooth this over time." },
-  ],
-  insights: [
-    { id: "i1", title: "Excess sebum in T-zone", text: "Pore mapping shows overactive oil production, likely worsened by humidity.", ingredient: "Niacinamide" },
-    { id: "i2", title: "Dehydrated cheeks", text: "Transepidermal water loss detected. Your skin is losing moisture quickly.", ingredient: "Hyaluronic Acid" },
-    { id: "i3", title: "Early signs of sun damage", text: "Micro-pigmentation forming under the surface. Needs defensive care.", ingredient: "Vitamin C" },
-  ],
-  climate: {
-    city: "Mumbai",
-    text: "High humidity worsens oiliness. Your routine needs lightweight, water-based layers to prevent clogged pores while keeping skin hydrated."
-  }
-};
+import { ArrowRight, CheckCircle2, Download, MapPin, RefreshCw, Share2, Sparkles } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
 
 type ReportConcern = {
   name?: string;
@@ -60,31 +30,95 @@ type ReportRecord = {
   climate_note?: string;
 };
 
-const circleVariants = {
-  hidden: { strokeDashoffset: 2 * Math.PI * 45 },
-  visible: (score: number) => ({
-    strokeDashoffset: 2 * Math.PI * 45 - (score / 100) * (2 * Math.PI * 45),
-    transition: { duration: 1.5, delay: 0.5 }
-  })
+type ReportUi = {
+  score: number;
+  city: string;
+  date: string;
+  concerns: ReportConcern[];
+  insights: ReportInsight[];
+  climate: { city: string; text: string };
 };
 
-const containerVariants = {
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+const MOCK_REPORT: ReportRecord = {
+  overall_glow_score: 72,
+  city: "Mumbai",
+  created_at: "2026-05-01",
+  concerns: [
+    {
+      name: "Acne",
+      score: 70,
+      severity: "high",
+      explanation: "Active congestion along the jawline suggests trapped sebum and hormonal triggers.",
+      recommendedIngredient: "Salicylic Acid",
+    },
+    {
+      name: "Pigmentation",
+      score: 60,
+      severity: "moderate",
+      explanation: "Mild sun spots detected on cheeks. Daily SPF and brighteners reduce darkening.",
+      recommendedIngredient: "Vitamin C",
+    },
+    {
+      name: "Hydration",
+      score: 40,
+      severity: "mild",
+      explanation: "Your barrier looks stable but needs consistent lightweight hydration.",
+      recommendedIngredient: "Hyaluronic Acid",
+    },
+    {
+      name: "Texture",
+      score: 55,
+      severity: "moderate",
+      explanation: "Uneven texture appears in the T-zone. Niacinamide can smooth over time.",
+      recommendedIngredient: "Niacinamide",
+    },
+  ],
+  insights: [
+    {
+      finding: "Excess sebum in T-zone",
+      explanation: "Pore mapping shows overactive oil production, likely worsened by humidity.",
+      recommendedIngredient: "Niacinamide",
+    },
+    {
+      finding: "Dehydrated cheeks",
+      explanation: "Transepidermal water loss detected. Your skin is losing moisture quickly.",
+      recommendedIngredient: "Hyaluronic Acid",
+    },
+    {
+      finding: "Early signs of sun damage",
+      explanation: "Micro-pigmentation forming under the surface. Needs defensive care.",
+      recommendedIngredient: "Vitamin C",
+    },
+  ],
+  climate_note:
+    "High humidity worsens oiliness. Your routine needs lightweight, water-based layers to prevent clogged pores.",
+};
+
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.15 } }
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.12,
+      delayChildren: 0.1,
+    },
+  },
 };
 
-const itemVariants = {
+const easeCurve: [number, number, number, number] = [0.22, 0.68, 0, 1.1];
+
+const itemVariants: Variants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
-};
-
-const getConcernIcon = (name?: string) => {
-  const key = (name || "").toLowerCase();
-  if (key.includes("acne") || key.includes("blemish")) return AlertCircle;
-  if (key.includes("pigment") || key.includes("spot")) return Sun;
-  if (key.includes("hydration") || key.includes("dry")) return Droplets;
-  if (key.includes("texture") || key.includes("pore")) return Activity;
-  return Maximize;
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.4, ease: easeCurve },
+  },
 };
 
 const formatReportDate = (value?: string) => {
@@ -94,61 +128,301 @@ const formatReportDate = (value?: string) => {
   return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 };
 
-const mapReportToUi = (data: ReportRecord | null, fallbackCity: string) => {
-  const concerns = Array.isArray(data?.concerns) ? data.concerns : [];
-  const insights = Array.isArray(data?.insights) ? data.insights : [];
+const mapReportToUi = (data: ReportRecord | null, fallbackCity: string): ReportUi => {
+  const concerns = Array.isArray(data?.concerns) ? data?.concerns : [];
+  const insights = Array.isArray(data?.insights) ? data?.insights : [];
   const defaultIngredient = concerns[0]?.recommendedIngredient || "Niacinamide";
 
   return {
-    score: typeof data?.overall_glow_score === "number" ? data.overall_glow_score : 0,
+    score: typeof data?.overall_glow_score === "number" ? data.overall_glow_score : MOCK_REPORT.overall_glow_score || 0,
     city: data?.city || fallbackCity,
     date: formatReportDate(data?.created_at),
-    concerns: concerns.length
-      ? concerns.map((concern, idx) => ({
-          id: `concern-${idx}`,
-          name: concern?.name || "Concern",
-          icon: getConcernIcon(concern?.name),
-          score: typeof concern?.score === "number" ? concern.score : 0,
-          severity: concern?.severity || "Moderate",
-          aiText: concern?.explanation || "No additional details available yet.",
-        }))
-      : MOCK_REPORT.concerns,
+    concerns: concerns.length ? concerns : MOCK_REPORT.concerns || [],
     insights: insights.length
-        ? insights.map((insight, idx) => ({
-          id: `insight-${idx}`,
-          title: insight?.finding || "Insight",
-          text: insight?.explanation || "No additional details available yet.",
-          ingredient: insight?.recommendedIngredient || defaultIngredient,
+      ? insights.map((insight) => ({
+          finding: insight?.finding || "Insight",
+          explanation: insight?.explanation || "No additional details available yet.",
+          recommendedIngredient: insight?.recommendedIngredient || defaultIngredient,
         }))
-      : MOCK_REPORT.insights,
+      : MOCK_REPORT.insights || [],
     climate: {
       city: data?.city || fallbackCity,
-      text: data?.climate_note || MOCK_REPORT.climate.text,
+      text: data?.climate_note || MOCK_REPORT.climate_note || "",
     },
   };
 };
 
+function getConcernIcon(name?: string): string {
+  const icons: Record<string, string> = {
+    acne: "⚡",
+    pigmentation: "☀️",
+    dryness: "💧",
+    dullness: "✨",
+    texture: "🌿",
+    pores: "🔬",
+    sensitivity: "🌸",
+    hydration: "💦",
+    default: "◉",
+  };
+  return icons[name?.toLowerCase() || "default"] ?? icons.default;
+}
+
+function ReportSkeleton() {
+  return (
+    <div style={{ padding: "24px 20px", maxWidth: 640, margin: "0 auto" }}>
+      <div
+        style={{
+          width: 140,
+          height: 140,
+          borderRadius: "50%",
+          background: "#1F1015",
+          margin: "0 auto 24px",
+          animation: "pulse 1.5s ease-in-out infinite",
+        }}
+      />
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 12,
+          marginBottom: 20,
+        }}
+      >
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            style={{
+              height: 90,
+              borderRadius: 14,
+              background: "#1F1015",
+              animation: "pulse 1.5s ease-in-out infinite",
+              animationDelay: `${i * 0.1}s`,
+            }}
+          />
+        ))}
+      </div>
+      {[1, 2, 3].map((i) => (
+        <div
+          key={i}
+          style={{
+            height: 80,
+            borderRadius: 14,
+            background: "#1F1015",
+            marginBottom: 12,
+            animation: "pulse 1.5s ease-in-out infinite",
+            animationDelay: `${i * 0.15}s`,
+          }}
+        />
+      ))}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 0.4 }
+          50% { opacity: 0.8 }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function ConcernCard({ concern }: { concern: ReportConcern }) {
+  const [expanded, setExpanded] = useState(false);
+  const score = typeof concern.score === "number" ? concern.score : 0;
+  const severity = (concern.severity || "moderate").toLowerCase();
+
+  const severityColor =
+    severity === "high"
+      ? "#C05060"
+      : severity === "moderate"
+      ? "#C49A30"
+      : "#5A9A7A";
+
+  return (
+    <motion.div
+      layout
+      onClick={() => setExpanded(!expanded)}
+      style={{
+        background: "#1F1015",
+        border: "1px solid #3A2028",
+        borderRadius: 14,
+        padding: "14px 14px",
+        cursor: "pointer",
+        overflow: "hidden",
+        minWidth: 0,
+        width: "100%",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            background: "#2A1520",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ fontSize: 14 }}>{getConcernIcon(concern.name)}</span>
+        </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p
+            style={{
+              fontWeight: 500,
+              fontSize: 13,
+              color: "#E8C9A0",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {concern.name}
+          </p>
+          <p style={{ fontSize: 11, color: "#9A7A70" }}>{concern.severity}</p>
+        </div>
+      </div>
+
+      <div
+        style={{
+          height: 3,
+          background: "#3A2028",
+          borderRadius: 2,
+          overflow: "hidden",
+          marginBottom: 8,
+        }}
+      >
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${score}%` }}
+          transition={{ duration: 1, ease: "easeOut", delay: 0.3 }}
+          style={{
+            height: "100%",
+            background: severityColor,
+            borderRadius: 2,
+          }}
+        />
+      </div>
+
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            <p style={{ fontSize: 12, color: "#9A7A70", lineHeight: 1.5, marginBottom: 8 }}>
+              {concern.explanation}
+            </p>
+            <span
+              style={{
+                fontSize: 11,
+                color: "#C49A6C",
+                background: "rgba(196,154,108,0.1)",
+                border: "1px solid rgba(196,154,108,0.2)",
+                padding: "3px 10px",
+                borderRadius: 20,
+              }}
+            >
+              Try: {concern.recommendedIngredient}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
 export default function ReportPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { userId } = useAppContext();
-  const supabase = useSupabaseClient();
-  const reportId = searchParams?.get("id") || searchParams?.get("reportId");
-  const fallbackCity = searchParams?.get("city") || MOCK_REPORT.city;
-  const [report, setReport] = useState(MOCK_REPORT);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [expandedConcern, setExpandedConcern] = useState<string | null>(null);
-  const reportRef = useRef<HTMLDivElement>(null);
+  const reportId = searchParams?.get("id") ?? null;
+  const fallbackCity = searchParams?.get("city") ?? MOCK_REPORT.city ?? "Mumbai";
 
-  // Score Color Logic
-  const getScoreColor = (value: number) => {
-    if (value > 75) return "var(--green)";
-    if (value >= 50) return "var(--amber)";
-    return "var(--red)";
-  };
+  const [report, setReport] = useState<ReportRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const circumference = 2 * Math.PI * 45;
+  useEffect(() => {
+    if (!reportId) {
+      setError("No report ID in URL");
+      setLoading(false);
+      return;
+    }
+
+    const fetchReport = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const { data, error: dbError } = await supabase
+          .from("skin_reports")
+          .select("*")
+          .eq("id", reportId)
+          .single();
+
+        if (dbError || !data) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          const { data: retry, error: retryErr } = await supabase
+            .from("skin_reports")
+            .select("*")
+            .eq("id", reportId)
+            .single();
+
+          if (retryErr || !retry) {
+            setError("Could not load your report. Please try scanning again.");
+            setLoading(false);
+            return;
+          }
+          setReport(retry);
+        } else {
+          setReport(data);
+        }
+      } catch {
+        setError("Something went wrong loading your report.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReport();
+  }, [reportId]);
+
+  if (loading) {
+    return <ReportSkeleton />;
+  }
+
+  if (error || !report) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center">
+        <p style={{ fontFamily: "Cormorant Garamond", fontSize: 28, color: "#C49A6C" }}>
+          Something went wrong
+        </p>
+        <p style={{ color: "#9A7A70", marginTop: 8, fontSize: 14 }}>
+          {error ?? "Report not found"}
+        </p>
+        <button
+          onClick={() => router.push("/scan")}
+          style={{
+            marginTop: 24,
+            padding: "14px 32px",
+            background: "#D4856A",
+            color: "white",
+            borderRadius: 12,
+            border: "none",
+            fontSize: 15,
+            cursor: "pointer",
+          }}
+        >
+          Take a New Scan
+        </button>
+      </div>
+    );
+  }
+
+  const ui = mapReportToUi(report, fallbackCity);
+  const ringCircumference = 2 * Math.PI * 54;
 
   const handleShare = async () => {
     try {
@@ -163,226 +437,107 @@ export default function ReportPage() {
         alert("Link copied to clipboard.");
       }
     } catch {
-      setErrorMessage("Unable to share the report right now.");
+      setError("Unable to share the report right now.");
     }
   };
 
   const handleDownload = () => {
-    window.print(); // Simple fallback for PDF export
+    window.print();
   };
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadReport = async () => {
-      if (!reportId || !userId) {
-        setIsLoading(false);
-        if (!reportId) {
-          setErrorMessage("Missing report id.");
-        } else if (!userId) {
-          setErrorMessage("Sign in to view your report.");
-        }
-        return;
-      }
-
-      setIsLoading(true);
-      setErrorMessage(null);
-
-      try {
-        const { data, error } = await supabase
-          .from("skin_reports")
-          .select("*")
-          .eq("id", reportId)
-          .eq("user_id", userId)
-          .single();
-
-        if (error || !data) {
-          throw new Error("Report not found.");
-        }
-
-        const nextReport = mapReportToUi(data, fallbackCity);
-        if (isMounted) {
-          setReport(nextReport);
-        }
-      } catch (err: unknown) {
-        if (isMounted) {
-          const message = err instanceof Error ? err.message : "Unable to load report.";
-          setErrorMessage(message);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    loadReport();
-    return () => {
-      isMounted = false;
-    };
-  }, [reportId, userId, fallbackCity, supabase]);
-
   return (
-    <div className="min-h-screen bg-[#0F172A] text-white font-sans pb-24 overflow-x-hidden" ref={reportRef}>
-      <motion.div 
-        variants={containerVariants} 
-        initial="hidden" 
-        animate="visible"
-        className="max-w-md mx-auto"
-      >
-        {/* HEADER */}
+    <div className="min-h-screen bg-[#0F172A] text-white font-sans pb-24 overflow-x-hidden">
+      <motion.div variants={containerVariants} initial="hidden" animate="visible" className="max-w-md mx-auto">
         <motion.div variants={itemVariants} className="px-6 pt-12 pb-6 flex flex-col items-center">
           <p className="text-gray-400 text-sm font-medium tracking-wide uppercase mb-2">
-            {report.city} &middot; {report.date}
+            {ui.city} · {ui.date}
           </p>
           <h1 className="text-4xl text-center text-[#D4AF37] italic mb-10 font-heading">
             Your Glow Report
           </h1>
 
-          {/* Animated Score Ring */}
-          <div className="relative w-48 h-48 flex items-center justify-center mb-4">
-            <svg width="192" height="192" viewBox="0 0 100 100" className="transform -rotate-90">
-              <circle 
-                cx="50" cy="50" r="45" 
-                stroke="var(--border)" strokeWidth="6" fill="none" 
-              />
-              <motion.circle 
-                cx="50" cy="50" r="45" 
-                stroke={getScoreColor(report.score)} 
-                strokeWidth="6" 
-                fill="none" 
+          <div className="relative w-[160px] h-[160px] flex items-center justify-center mb-4">
+            <svg width="160" height="160" viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="54" fill="none" stroke="#3A2028" strokeWidth="8" />
+              <motion.circle
+                cx="60"
+                cy="60"
+                r="54"
+                fill="none"
+                stroke="#C49A6C"
+                strokeWidth="8"
                 strokeLinecap="round"
-                strokeDasharray={circumference}
-                custom={report.score}
-                variants={circleVariants}
-                initial="hidden"
-                animate="visible"
+                strokeDasharray={`${ringCircumference}`}
+                initial={{ strokeDashoffset: ringCircumference }}
+                animate={{
+                  strokeDashoffset: ringCircumference * (1 - ui.score / 100),
+                }}
+                transition={{ duration: 1.5, ease: "easeOut", delay: 0.3 }}
+                transform="rotate(-90 60 60)"
               />
             </svg>
             <div className="absolute flex flex-col items-center justify-center">
-              <motion.span 
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 1, duration: 0.5 }}
-                className="text-5xl font-bold text-white tracking-tighter"
-              >
-                {report.score}
-              </motion.span>
+              <span className="text-5xl font-bold text-white tracking-tighter">{ui.score}</span>
               <span className="text-xs text-gray-400 uppercase tracking-widest mt-1">Glow Score</span>
             </div>
           </div>
         </motion.div>
 
-        {(isLoading || errorMessage) && (
-          <motion.div variants={itemVariants} className="px-6 mb-6">
-            {isLoading && (
-              <div className="text-xs text-gray-400">Loading your report...</div>
-            )}
-            {errorMessage && (
-              <div className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                {errorMessage}
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {/* CONCERN CARDS (Horizontal Scroll) */}
-        <motion.div variants={itemVariants} className="mb-10 w-full">
-          <h2 className="px-6 text-xl font-bold mb-4">Target Areas</h2>
-          <div className="flex overflow-x-auto gap-4 px-6 pb-6 snap-x snap-mandatory hide-scrollbar">
-            {report.concerns.map(concern => {
-              const Icon = concern.icon;
-              const isExpanded = expandedConcern === concern.id;
-              
-              return (
-                <motion.div 
-                  key={concern.id}
-                  layout
-                  onClick={() => setExpandedConcern(isExpanded ? null : concern.id)}
-                  className="snap-start shrink-0 w-64 bg-[#111827] border border-gray-800 rounded-2xl p-5 cursor-pointer relative overflow-hidden"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 bg-[#1F2937] rounded-xl text-[#D4AF37]">
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-lg">{concern.name}</h3>
-                        <p className="text-xs text-gray-400">{concern.severity}</p>
-                      </div>
-                    </div>
-                    <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                  </div>
-
-                  <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden mb-3">
-                    <motion.div 
-                      className="h-full"
-                      style={{ backgroundColor: getScoreColor(concern.score) }}
-                      initial={{ width: 0 }}
-                      animate={{ width: `${concern.score}%` }}
-                      transition={{ duration: 1, delay: 0.5 }}
-                    />
-                  </div>
-
-                  <AnimatePresence>
-                    {isExpanded && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="text-sm text-gray-300 leading-relaxed pt-2 border-t border-gray-800/50 mt-2"
-                      >
-                        {concern.aiText}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              );
-            })}
+        <motion.div variants={itemVariants} className="px-6 mb-10">
+          <h2 className="text-xl font-bold mb-4">Target Areas</h2>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: "12px",
+              width: "100%",
+              padding: "0 4px",
+            }}
+          >
+            {ui.concerns?.map((concern, idx) => (
+              <ConcernCard key={`${concern.name}-${idx}`} concern={concern} />
+            ))}
           </div>
         </motion.div>
 
-        {/* AI INSIGHTS SECTION */}
         <motion.div variants={itemVariants} className="px-6 mb-10">
           <div className="flex items-center gap-2 mb-4 text-[#D4AF37]">
             <Sparkles className="w-5 h-5" />
             <h2 className="text-xl font-bold text-white">What your skin is telling us</h2>
           </div>
           <div className="space-y-4">
-            {report.insights.map((insight) => (
-              <div key={insight.id} className="bg-[#111827] border border-gray-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+            {ui.insights.map((insight, idx) => (
+              <div
+                key={`${insight.finding}-${idx}`}
+                className="bg-[#111827] border border-gray-800 rounded-2xl p-5 shadow-lg relative overflow-hidden"
+              >
                 <div className="absolute top-0 left-0 w-1 h-full bg-[#D4AF37]/50" />
-                <h3 className="font-semibold text-[17px] mb-2 text-white">{insight.title}</h3>
-                <p className="text-gray-400 text-sm leading-relaxed mb-4">{insight.text}</p>
+                <h3 className="font-semibold text-[17px] mb-2 text-white">{insight.finding}</h3>
+                <p className="text-gray-400 text-sm leading-relaxed mb-4">{insight.explanation}</p>
                 <div className="inline-flex items-center gap-1.5 bg-[#D4AF37]/10 text-[#D4AF37] px-3 py-1.5 rounded-full text-xs font-semibold">
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  Try: {insight.ingredient}
+                  Try: {insight.recommendedIngredient}
                 </div>
               </div>
             ))}
           </div>
         </motion.div>
 
-        {/* CLIMATE SECTION */}
         <motion.div variants={itemVariants} className="px-6 mb-12">
           <div className="bg-gradient-to-br from-[#111827] to-[#0F172A] border border-[#1F2937] rounded-3xl p-6 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-5">
               <MapPin className="w-24 h-24" />
             </div>
             <h2 className="text-xl font-bold mb-3 flex items-center gap-2">
-              Your {report.climate.city} Formula
+              Your {ui.climate.city} Formula
             </h2>
-            <p className="text-gray-300 text-sm leading-relaxed relative z-10">
-              {report.climate.text}
-            </p>
+            <p className="text-gray-300 text-sm leading-relaxed relative z-10">{ui.climate.text}</p>
           </div>
         </motion.div>
 
-        {/* ROUTINE PREVIEW */}
         <motion.div variants={itemVariants} className="px-6 mb-10">
           <div className="bg-[#D4AF37]/10 border border-[#D4AF37]/20 rounded-3xl p-6 text-center shadow-[0_0_30px_rgba(212,175,55,0.05)]">
             <h2 className="text-lg font-semibold text-white mb-6">Your 5-step K-Beauty routine is ready</h2>
-            
             <div className="flex items-center justify-center gap-2 mb-8">
               {[1, 2, 3, 4, 5].map((step, idx) => (
                 <div key={idx} className="flex items-center gap-2">
@@ -393,14 +548,9 @@ export default function ReportPage() {
                 </div>
               ))}
             </div>
-
-            <button 
+            <button
               onClick={() =>
-                router.push(
-                  reportId
-                    ? `/routine?reportId=${encodeURIComponent(reportId)}`
-                    : "/routine"
-                )
+                router.push(reportId ? `/routine?reportId=${encodeURIComponent(reportId)}` : "/routine")
               }
               className="w-full bg-[#D4AF37] text-[#0F172A] py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 hover:bg-[#D4AF37]/90 active:scale-[0.98] transition-all"
             >
@@ -409,23 +559,22 @@ export default function ReportPage() {
           </div>
         </motion.div>
 
-        {/* SHARE + ACTIONS */}
         <motion.div variants={itemVariants} className="px-6 flex flex-col gap-3">
-          <button 
+          <button
             onClick={handleShare}
             className="w-full py-4 rounded-xl flex items-center justify-center gap-2 bg-[#111827] border border-gray-800 text-white font-medium hover:bg-gray-800 transition-colors"
           >
             <Share2 className="w-5 h-5" /> Share my report
           </button>
-          
+
           <div className="grid grid-cols-2 gap-3">
-            <button 
+            <button
               onClick={handleDownload}
               className="py-4 rounded-xl flex items-center justify-center gap-2 bg-transparent border border-gray-800 text-gray-300 font-medium hover:text-white hover:border-gray-600 transition-colors"
             >
               <Download className="w-4 h-4" /> Download PDF
             </button>
-            <button 
+            <button
               onClick={() => router.push("/scan")}
               className="py-4 rounded-xl flex items-center justify-center gap-2 bg-transparent border border-gray-800 text-gray-300 font-medium hover:text-white hover:border-gray-600 transition-colors"
             >
@@ -433,20 +582,7 @@ export default function ReportPage() {
             </button>
           </div>
         </motion.div>
-
       </motion.div>
-
-      {/* Internal CSS for horizontal scrollbar hide */}
-        <style dangerouslySetInnerHTML={{__html: `
-        .hide-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        .hide-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-      `}} />
     </div>
   );
 }
-

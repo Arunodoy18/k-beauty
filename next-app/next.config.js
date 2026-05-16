@@ -2,10 +2,8 @@
 const nextConfig = {
   output: 'standalone',
   images: {
-    domains: [
-      'lh3.googleusercontent.com',
-      'avatars.githubusercontent.com',
-      'res.cloudinary.com',
+    remotePatterns: [
+      { protocol: 'https', hostname: '**' },
     ],
   },
 }
