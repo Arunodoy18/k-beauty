@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, ShieldCheck, Sun } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
-import { getApiUrl } from "@/lib/api";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -138,17 +137,6 @@ type RoutinePayload = {
   personalizedCopy?: Record<string, string>;
 };
 
-type RoutineApiResponse = {
-  success?: boolean;
-  message?: string;
-  data?: RoutinePayload;
-};
-
-type ReportRecord = {
-  id?: string;
-  user_id?: string;
-};
-
 type MockProduct = (typeof MOCK_ROUTINE)["routine"][number]["product"];
 
 type RoutineProductCard = {
@@ -271,77 +259,73 @@ function RoutineSkeleton() {
 export default function RoutinePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const reportId = searchParams?.get("reportId") || searchParams?.get("id");
 
   const [loading, setLoading] = useState(true);
   const [routineData, setRoutineData] = useState<typeof MOCK_ROUTINE | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!reportId) {
-      setErrorMessage("No report ID in URL");
-      setLoading(false);
-      return;
-    }
+  const fetchRoutine = useCallback(async () => {
+    setLoading(true);
+    setErrorMessage(null);
 
-    const fetchRoutine = async () => {
-      setLoading(true);
-      setErrorMessage(null);
-
-      try {
-        const { data, error: dbError } = await supabase
-          .from("skin_reports")
-          .select("id,user_id")
-          .eq("id", reportId)
-          .single();
-
-        let reportRow: ReportRecord | null = data;
-
-        if (dbError || !data) {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          const { data: retry, error: retryErr } = await supabase
-            .from("skin_reports")
-            .select("id,user_id")
-            .eq("id", reportId)
-            .single();
-
-          if (retryErr || !retry) {
-            setErrorMessage("Could not load your report. Please try scanning again.");
-            setLoading(false);
-            return;
-          }
-          reportRow = retry;
-        }
-
-        if (!reportRow?.user_id) {
-          setErrorMessage("Could not load your report. Please try scanning again.");
-          setLoading(false);
-          return;
-        }
-
-        const res = await fetch(
-          getApiUrl(
-            `/api/get-routine?reportId=${encodeURIComponent(reportId)}&userId=${encodeURIComponent(reportRow.user_id)}`
-          )
-        );
-        const payload: RoutineApiResponse = await res.json();
-
-        if (!res.ok || !payload?.success) {
-          throw new Error(payload?.message || "Unable to load routine.");
-        }
-
-        const nextRoutine = buildRoutineFromApi(payload.data ?? {});
-        setRoutineData(nextRoutine);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Unable to load routine.";
-        setErrorMessage(message);
-      } finally {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/login");
         setLoading(false);
+        return;
       }
-    };
 
+      const urlReportId = searchParams?.get("reportId");
+
+      let reportData: RoutinePayload["report"] | null = null;
+      if (urlReportId) {
+        const { data } = await supabase
+          .from("skin_reports")
+          .select("*")
+          .eq("id", urlReportId)
+          .single();
+        reportData = data;
+      } else {
+        const { data } = await supabase
+          .from("skin_reports")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+        reportData = data;
+      }
+
+      if (!reportData) {
+        setErrorMessage("No skin report found. Take a scan first.");
+        setLoading(false);
+        return;
+      }
+
+      const { data: products } = await supabase
+        .from("products")
+        .select("*")
+        .eq("is_active", true);
+
+      const nextRoutine = buildRoutineFromApi({
+        report: reportData,
+        products: products ?? [],
+      });
+      setRoutineData(nextRoutine);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unable to load routine.";
+      setErrorMessage(message);
+    } finally {
+      setLoading(false);
+    }
+  }, [router, searchParams]);
+
+  useEffect(() => {
     fetchRoutine();
-  }, [reportId]);
+  }, [fetchRoutine]);
 
   if (loading) {
     return <RoutineSkeleton />;

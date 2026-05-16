@@ -196,13 +196,14 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (dbError) {
-      console.error("Supabase insert error:", dbError);
+      console.error("DB INSERT ERROR:", JSON.stringify(dbError));
       return NextResponse.json(
         { reportId: "temp-" + Date.now(), usedFallback, ...report },
         { headers: corsHeaders }
       );
     }
 
+    console.log("Report saved successfully:", saved.id);
     return NextResponse.json(
       { reportId: saved.id, usedFallback, ...report },
       { headers: corsHeaders }

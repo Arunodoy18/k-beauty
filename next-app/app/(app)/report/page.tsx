@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { Variants } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -344,50 +344,62 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!reportId) {
-      setError("No report ID in URL");
-      setLoading(false);
-      return;
-    }
+  const fetchReport = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-    const fetchReport = async () => {
-      setLoading(true);
-      setError(null);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/login");
+        setLoading(false);
+        return;
+      }
 
-      try {
-        const { data, error: dbError } = await supabase
+      let query = supabase
+        .from("skin_reports")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (reportId) {
+        query = query.eq("id", reportId);
+      }
+
+      const { data, error: dbErr } = await query.limit(1).single();
+
+      if (dbErr || !data) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const { data: retry } = await supabase
           .from("skin_reports")
           .select("*")
-          .eq("id", reportId)
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
           .single();
 
-        if (dbError || !data) {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          const { data: retry, error: retryErr } = await supabase
-            .from("skin_reports")
-            .select("*")
-            .eq("id", reportId)
-            .single();
-
-          if (retryErr || !retry) {
-            setError("Could not load your report. Please try scanning again.");
-            setLoading(false);
-            return;
-          }
-          setReport(retry);
-        } else {
-          setReport(data);
+        if (!retry) {
+          setError("No scan found. Take your first AI skin scan!");
+          setLoading(false);
+          return;
         }
-      } catch {
-        setError("Something went wrong loading your report.");
-      } finally {
-        setLoading(false);
+        setReport(retry);
+      } else {
+        setReport(data);
       }
-    };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(`Could not load report: ${message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [reportId, router]);
 
+  useEffect(() => {
     fetchReport();
-  }, [reportId]);
+  }, [fetchReport]);
 
   if (loading) {
     return <ReportSkeleton />;
@@ -395,27 +407,44 @@ export default function ReportPage() {
 
   if (error || !report) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center">
-        <p style={{ fontFamily: "Cormorant Garamond", fontSize: 28, color: "#C49A6C" }}>
-          Something went wrong
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "80vh",
+          padding: "24px",
+          textAlign: "center",
+        }}
+      >
+        <p
+          style={{
+            fontFamily: "Cormorant Garamond, serif",
+            fontSize: 26,
+            color: "#C49A6C",
+            marginBottom: 12,
+          }}
+        >
+          No report yet
         </p>
-        <p style={{ color: "#9A7A70", marginTop: 8, fontSize: 14 }}>
-          {error ?? "Report not found"}
+        <p style={{ color: "#9A7A70", fontSize: 14, marginBottom: 28 }}>
+          {error ?? "Take your first AI skin scan to see your report"}
         </p>
         <button
           onClick={() => router.push("/scan")}
           style={{
-            marginTop: 24,
-            padding: "14px 32px",
             background: "#D4856A",
             color: "white",
-            borderRadius: 12,
             border: "none",
+            borderRadius: 14,
+            padding: "14px 32px",
             fontSize: 15,
             cursor: "pointer",
+            fontWeight: 500,
           }}
         >
-          Take a New Scan
+          Take a Skin Scan ✨
         </button>
       </div>
     );
