@@ -242,7 +242,7 @@ export default function ScanPage() {
       if (messageIntervalRef.current) clearInterval(messageIntervalRef.current);
       if (slowMessageRef.current) clearTimeout(slowMessageRef.current);
     };
-  }, []);
+  }, [stopCamera]);
 
   const handleQuizOption = (question: QuizQuestion, value: string) => {
     setQuizAnswers((prev) => ({ ...prev, [question.id]: value }));

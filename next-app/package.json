@@ -3,12 +3,13 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbo",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
+    "@ducanh2912/next-pwa": "^10.2.9",
     "@google/generative-ai": "latest",
     "@hugeicons/core-free-icons": "^4.0.0",
     "@hugeicons/react": "^1.1.6",
@@ -20,11 +21,11 @@
     "framer-motion": "latest",
     "groq-sdk": "^1.2.0",
     "lucide-react": "latest",
-    "next": "14.x",
+    "next": "^16.2.6",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.4.3",
-    "react": "18.x",
-    "react-dom": "18.x",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
     "resend": "latest",
     "shadcn": "^4.1.1",
     "tailwind-merge": "^3.5.0",
@@ -37,11 +38,12 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "autoprefixer": "latest",
-    "eslint": "latest",
-    "eslint-config-next": "14.x",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.6",
     "postcss": "latest",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
+    "sharp": "^0.34.5",
     "tailwindcss": "3.x",
     "typescript": "5.x"
   }

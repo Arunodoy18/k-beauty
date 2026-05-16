@@ -7,7 +7,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data } = await supabase.auth.getUser();
 
   if (data.user) {

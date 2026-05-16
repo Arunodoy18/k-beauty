@@ -1,9 +1,9 @@
+@import "../node_modules/tw-animate-css/dist/tw-animate.css";
+@import "../node_modules/shadcn/dist/tailwind.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
 
 :root {
   --bg: #0d0608;
@@ -400,6 +400,55 @@
   color: var(--blush);
   padding: 0.38rem 0.72rem;
   font-size: 0.78rem;
+}
+
+/* PWA safe areas */
+:root {
+  --sat: env(safe-area-inset-top);
+  --sab: env(safe-area-inset-bottom);
+  --sal: env(safe-area-inset-left);
+  --sar: env(safe-area-inset-right);
+}
+
+/* Prevent overscroll bounce on iOS */
+html,
+body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Hide scrollbars but keep scroll */
+::-webkit-scrollbar {
+  display: none;
+}
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Bottom nav safe area */
+.bottom-nav {
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+/* Tap highlight off */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* App-like text selection */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+input,
+textarea,
+p,
+h1,
+h2,
+h3 {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .brand-steps-grid article,

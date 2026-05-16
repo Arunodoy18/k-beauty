@@ -5,3 +5,10 @@ node_modules/
 
 # Local Netlify folder
 .netlify
+
+# PWA generated files
+next-app/public/sw.js
+next-app/public/workbox-*.js
+next-app/public/worker-*.js
+next-app/public/sw.js.map
+next-app/public/workbox-*.js.map
